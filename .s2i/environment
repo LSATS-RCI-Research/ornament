@@ -1,0 +1,3 @@
+DOCUMENTROOT /opt/app-root/src/omeka-s
+COMPOSER_ARGS --dry-run
+PHP_MEMORY_LIMIT 512M
