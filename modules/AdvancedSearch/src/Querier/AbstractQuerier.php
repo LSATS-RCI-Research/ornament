@@ -43,7 +43,7 @@ abstract class AbstractQuerier implements QuerierInterface
     /**
      * @var ServiceLocatorInterface
      */
-    protected $services;
+    protected $serviceLocator;
 
     /**
      * @var SearchEngineRepresentation $engine
@@ -55,10 +55,15 @@ abstract class AbstractQuerier implements QuerierInterface
      */
     protected $query;
 
-    public function setServiceLocator(ServiceLocatorInterface $services): QuerierInterface
+    public function setServiceLocator(ServiceLocatorInterface $serviceLocator): QuerierInterface
     {
-        $this->services = $services;
+        $this->serviceLocator = $serviceLocator;
         return $this;
+    }
+
+    protected function getServiceLocator(): ServiceLocatorInterface
+    {
+        return $this->serviceLocator;
     }
 
     public function setSearchEngine(SearchEngineRepresentation $engine): QuerierInterface
@@ -78,4 +83,30 @@ abstract class AbstractQuerier implements QuerierInterface
     abstract public function querySuggestions(): Response;
 
     abstract public function getPreparedQuery();
+
+    /**
+     * Get a setting of the search engine.
+     *
+     * @param string $name
+     * @param mixed $default
+     * @return mixed
+     */
+    protected function getSetting(string $name, $default = null)
+    {
+        $settings = $this->engine->settings();
+        return $settings[$name] ?? $default;
+    }
+
+    /**
+     * Get a setting of the search adapter.
+     *
+     * @param string $name
+     * @param mixed $default
+     * @return mixed
+     */
+    protected function getAdapterSetting(string $name, $default = null)
+    {
+        $adapterSettings = $this->getSetting('adapter', []);
+        return $adapterSettings[$name] ?? $default;
+    }
 }

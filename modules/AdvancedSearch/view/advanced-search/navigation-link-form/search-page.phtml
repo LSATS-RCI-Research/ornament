@@ -1,7 +1,8 @@
 <?php
+
 /*
- * Copyright BibLibre, 2016-2017
- * Copyright Daniel Berthereau, 2017-2021
+ * Copyright BibLibre, 2016
+ * Copyright Daniel Berthereau, 2018-2021
  *
  * This software is governed by the CeCILL license under French law and abiding
  * by the rules of distribution of free software.  You can use, modify and/ or
@@ -29,32 +30,32 @@
 
 /**
  * @var \Laminas\View\Renderer\PhpRenderer $this
- * @var \AdvancedSearch\Api\Representation\SearchConfigRepresentation $searchConfig
- * @var \AdvancedSearch\Form\Admin\SearchConfigConfigureForm $form
+ * @var \Omeka\Site\Navigation\Link\LinkInterface $link
+ * @var array $data
  */
-
 $translate = $this->plugin('translate');
-$assetUrl = $this->plugin('assetUrl');
+$escape = $this->plugin('escapeHtml');
 
-$this->headLink()
-    ->appendStylesheet($assetUrl('css/advanced-search-configure.css', 'AdvancedSearch'));
-$this->headScript()
-    ->appendFile($assetUrl('js/advanced-search-configure.js', 'AdvancedSearch'), 'text/javascript', ['defer' => 'defer']);
-;
+$label = $data['label'] ?? null;
+$searchConfigId = $data['advancedsearch_config_id'] ?? null;
 
-$engine = $searchConfig->engine();
-$adapter = $engine ? $engine->adapter() : null;
-if (empty($adapter)) {
-    return;
-}
-
-$form->prepare();
+$searchConfigs = $this->api()->search('search_configs')->getContent();
 ?>
 
-<?= $this->pageTitle(sprintf($translate('Search page "%1$s" (%2$s)'), $searchConfig->name(), $searchConfig->path())) ?>
-
-<div id="page-actions">
-    <button form="search-form-configure"><?= $translate('Save page') ?></button>
-</div>
-
-<?= $this->form($form) ?>
+<label><?php $translate('Type'); ?>
+    <input type="text" value="<?php echo $escape($link->getName()); ?>" disabled="disabled">
+</label>
+<label><?php $translate('Label'); ?>
+    <input type="text" data-name="label" value="<?php echo $escape($label); ?>">
+</label>
+<label>
+    <?php echo $translate('Page'); ?>
+    <select data-name="advancedsearch_config_id">
+        <?php foreach ($searchConfigs as $searchConfig): ?>
+            <?php $selected = $searchConfigId && $searchConfigId == $searchConfig->id(); ?>
+            <option value="<?php echo $searchConfig->id(); ?>" <?php echo ($selected) ? 'selected="selected"' : ''; ?>>
+                <?php echo $searchConfig->name(); ?>
+            </option>
+        <?php endforeach; ?>
+    </select>
+</label>

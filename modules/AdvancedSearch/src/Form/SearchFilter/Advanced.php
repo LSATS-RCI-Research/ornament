@@ -47,22 +47,17 @@ class Advanced extends Fieldset
                 'class' => 'filter',
             ]);
 
-        $joiner = (bool) $this->getOption('field_joiner');
-        $joinerNot = (bool) $this->getOption('field_joiner_not');
+        $joiner = $this->getOption('field_joiner');
         if ($joiner) {
-            $valueOptions = [
-                'and' => 'and', // @translate
-                'or' => 'or', // @translate
-            ];
-            if ($joinerNot) {
-                $valueOptions['not'] = 'not'; // @translate
-            }
             $this
                 ->add([
                     'name' => 'join',
                     'type' => Element\Select::class,
                     'options' => [
-                        'value_options' => $valueOptions,
+                        'value_options' => [
+                            'and' => 'and', // @translate
+                            'or' => 'or', // @translate
+                        ],
                         'label_attributes' => [
                             'class' => 'search-boolean-label',
                         ],
@@ -90,44 +85,23 @@ class Advanced extends Fieldset
                 ],
             ]);
 
-        $operator = (bool) $this->getOption('field_operator');
+        $operator = $this->getOption('field_operator');
         if ($operator) {
-            $operators = $this->getOption('field_operators') ?: [
-                'eq' => 'is exactly', // @translate
-                'neq' => 'is not exactly', // @translate
-                'in' => 'contains', // @translate
-                'nin' => 'does not contain', // @translate
-                'sw' => 'starts with', // @translate
-                'nsw' => 'does not start with', // @translate
-                'ew' => 'ends with', // @translate
-                'new' => 'does not end with', // @translate
-                'ex' => 'has any value', // @translate
-                'nex' => 'has no values', // @translate
-                'res' => 'is resource with ID', // @translate
-                'nres' => 'is not resource with ID', // @translate
-                'lex' => 'is a linked resource', // @translate
-                'nlex' => 'is not a linked resource', // @translate
-                'lres' => 'is linked with resource with ID', // @translate
-                'nlres' => 'is not linked with resource with ID', // @translate
-            ];
-            if ($joiner && $joinerNot) {
-                unset(
-                    $operators['neq'],
-                    $operators['nin'],
-                    $operators['nsw'],
-                    $operators['new'],
-                    $operators['nex'],
-                    $operators['nres'],
-                    $operators['nlex'],
-                    $operators['nlres']
-                );
-            }
             $this
                 ->add([
                     'name' => 'type',
                     'type' => Element\Select::class,
                     'options' => [
-                        'value_options' => $operators,
+                        'value_options' => [
+                            'eq' => 'is exactly', // @translate
+                            'neq' => 'is not exactly', // @translate
+                            'in' => 'contains', // @translate
+                            'nin' => 'does not contain', // @translate
+                            'res' => 'is resource with ID', // @translate
+                            'nres' => 'is not resource with ID', // @translate
+                            'ex' => 'has any value', // @translate
+                            'nex' => 'has no values', // @translate
+                        ],
                         'label_attributes' => [
                             'class' => 'search-type-label',
                         ],
@@ -148,7 +122,7 @@ class Advanced extends Fieldset
     }
 
     /**
-     * TODO The fields should be checked early, not here.
+     * TODO The fields should be checked in
      */
     protected function getFilterFields(): array
     {

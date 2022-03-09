@@ -289,7 +289,7 @@ abstract class AbstractModule extends \Omeka\Module\AbstractModule
         // See core commit #2689ce92f.
         $sqls = array_filter(array_map('trim', explode(";\n", $sql)));
         foreach ($sqls as $sql) {
-            $result = $connection->executeStatement($sql);
+            $result = $connection->exec($sql);
         }
 
         return $result;
@@ -562,10 +562,10 @@ abstract class AbstractModule extends \Omeka\Module\AbstractModule
             $stmt = $connection->executeQuery($sql, ['target_id' => $id]);
         } else {
             $sql = sprintf('SELECT id, value FROM %s', $settings->getTableName());
-            $stmt = $connection->executeQuery($sql);
+            $stmt = $connection->query($sql);
         }
 
-        $currentSettings = $stmt->fetchAllKeyValue();
+        $currentSettings = $stmt->fetchAll(\PDO::FETCH_KEY_PAIR);
         $defaultSettings = $config[$space][$settingsType];
         // Skip settings that are arrays, because the fields "multi-checkbox"
         // and "multi-select" are removed when no value are selected, so it's

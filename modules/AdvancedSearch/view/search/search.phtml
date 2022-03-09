@@ -47,21 +47,20 @@ if ($this->resolver('search/index/search.phtml')) {
 }
 
 $plugins = $this->getHelperPluginManager();
-$api = $plugins->get('api');
-$partial = $plugins->get('partial');
-$assetUrl = $plugins->get('assetUrl');
 $translate = $plugins->get('translate');
 $translatePlural = $plugins->get('translatePlural');
-
+$assetUrl = $plugins->get('assetUrl');
+$partial = $plugins->get('partial');
+$api = $plugins->get('api');
 $vars = $this->vars();
+
+$isPartial = !$site;
+$skipFormAction = !empty($skipFormAction);
 
 // Used in case of a redirect of item-set/show to search, when used like item/browse.
 $itemSetId = $this->params()->fromRoute('item-set-id');
 // TODO Use site item set ?
 $itemSet = $itemSetId ? $api->searchOne('item_sets', ['id' => $itemSetId])->getContent() : null;
-
-$isPartial = !$site;
-$skipFormAction = !empty($skipFormAction);
 
 $this->headLink()->appendStylesheet($assetUrl('css/search.css', 'AdvancedSearch'));
 $this->headScript()->appendFile($assetUrl('js/search.js', 'AdvancedSearch'), 'text/javascript', ['defer' => 'defer']);
@@ -96,69 +95,38 @@ $this->headScript()->appendFile($assetUrl('js/search.js', 'AdvancedSearch'), 'te
 
 <?= $this->searchForm($searchPage, null, $skipFormAction) ?>
 
-<?php if (isset($response)):
-$documentCount = $response->getTotalResults();
-?>
+<?php if (isset($response)): ?>
 <div class="search-results-wrapper">
     <div class="search-results">
 
-        <?php if ($documentCount):
-            $itemSetsCount = $response->getResourceTotalResults('item_sets');
-            $itemsCount = $response->getResourceTotalResults('items');
-            $displayParts = $searchPage->setting('display', []);
-            $displayPartsHeader = array_filter($displayParts, function ($v) { return in_array($v, ['header', 'both']); });
-            $displayPartsFooter = array_filter($displayParts, function ($v) { return in_array($v, ['footer', 'both']); });
-            ?>
-
-        <?php if ($displayPartsHeader): ?>
-        <div class="search-results-part search-results-header">
-            <?= $partial('search/results-header-footer', [
+        <?php if ($response->getTotalResults()): ?>
+            <?= $partial('search/results-header', [
                 'searchPage' => $searchPage,
                 'query' => $query,
                 'response' => $response,
-                'itemSet' => $itemSet,
-                'resultPart' => 'header',
-                'documentCount' => $documentCount,
             ]) ?>
-        </div>
-        <?php endif; ?>
 
-        <div class="search-results-part search-results-list">
-            <?php if ($itemSetsCount): ?>
+            <?php $itemSetsCount = $response->getResourceTotalResults('item_sets'); ?>
             <?= $partial('search/resource-list', [
                 'site' => $site,
-                'searchPage' => $searchPage,
-                'query' => $query,
-                'response' => $response,
                 'title' => sprintf($translatePlural('%s item set', '%s item sets', $itemSetsCount), $itemSetsCount),
+                'response' => $response,
                 'resourceName' => 'item_sets',
             ]) ?>
-            <?php endif; ?>
 
-            <?php if ($itemsCount): ?>
+            <?php $itemsCount = $response->getResourceTotalResults('items'); ?>
             <?= $partial('search/resource-list', [
                 'site' => $site,
-                'searchPage' => $searchPage,
-                'query' => $query,
-                'response' => $response,
                 'title' => sprintf($translatePlural('%s item', '%s items', $itemsCount), $itemsCount),
+                'response' => $response,
                 'resourceName' => 'items',
             ]) ?>
-            <?php endif; ?>
-        </div>
 
-        <?php if ($displayPartsFooter): ?>
-        <div class="search-results-part search-results-footer">
-            <?= $partial('search/results-header-footer', [
+            <?= $partial('search/results-footer', [
                 'searchPage' => $searchPage,
                 'query' => $query,
                 'response' => $response,
-                'itemSet' => $itemSet,
-                'resultPart' => 'footer',
-                'documentCount' => $documentCount,
             ]) ?>
-        </div>
-        <?php endif; ?>
 
         <?php else: ?>
 
@@ -168,11 +136,6 @@ $documentCount = $response->getTotalResults();
                 <?php elseif (empty($query) && $itemSet): ?>
                 <?= $translate('This item set has no items.') ?>
                 <?php else: ?>
-                <?php if (in_array($searchPage->subSetting('display', 'search_filters', 'header'), ['header', 'both'])): ?>
-                <div class="search-results-part search-results-header">
-                    <?= $this->searchingFilters($searchPage, $query, ['template' => 'common/search-filters-links']) ?>
-                </div>
-                <?php endif; ?>
                 <?= $translate('Your query returned no results') ?>
                 <?php endif; ?>
             </div>

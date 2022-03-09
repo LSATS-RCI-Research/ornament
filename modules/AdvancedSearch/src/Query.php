@@ -29,9 +29,6 @@
  */
 namespace AdvancedSearch;
 
-/**
- * @todo Replace by the solarium query, that manages everything and can be used by mysql too!
- */
 class Query implements \JsonSerializable
 {
     /**
@@ -152,18 +149,9 @@ class Query implements \JsonSerializable
     /**
      * @param string[] $resources The types are generally "items" and "item_sets".
      */
-    public function setResources(array $resources): self
+    public function setResources($resources): self
     {
         $this->resources = $resources;
-        return $this;
-    }
-
-    /**
-     * @param string $resources Generally "items" or "item_sets".
-     */
-    public function addResource(string $resource): self
-    {
-        $this->resources[] = $resource;
         return $this;
     }
 
@@ -187,7 +175,6 @@ class Query implements \JsonSerializable
     }
 
     /**
-     * @todo Support multi-fields (name).
      * @param array|string $value
      */
     public function addFilter(string $name, $value): self
@@ -201,9 +188,6 @@ class Query implements \JsonSerializable
         return $this->filters;
     }
 
-    /**
-     * @todo Support multi-fields (name).
-     */
     public function addDateRangeFilter(string $name, string $from, string $to): self
     {
         $this->dateRangeFilters[$name][] = [
@@ -222,7 +206,6 @@ class Query implements \JsonSerializable
      * Add advanced filters, that work similarly to Omeka ones.
      *
      * Note: Some types and joiners may not be managed by the querier.
-     * @todo Support multi-fields (name).
      */
     public function addFilterQuery(string $name, $value, ?string $type = 'in', ?string $join = 'and'): self
     {
@@ -418,18 +401,6 @@ class Query implements \JsonSerializable
     public function getSiteId(): ?int
     {
         return $this->siteId;
-    }
-
-    /**
-     * Check if the query is filled, except public, pagination, sort and facets.
-     */
-    public function isSearchQuery(): bool
-    {
-        return $this->getQuery() !== ''
-            || $this->getFilters() !== []
-            || $this->getDateRangeFilters() !== []
-            || $this->getFilterQueries() !== []
-        ;
     }
 
     public function jsonSerialize(): array

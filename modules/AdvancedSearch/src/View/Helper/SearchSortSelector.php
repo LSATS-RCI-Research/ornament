@@ -50,8 +50,8 @@ class SearchSortSelector extends AbstractHelper
     {
         $plugins = $this->getView()->getHelperPluginManager();
         $translate = $plugins->get('translate');
-        foreach ($sortOptions as $name => &$sortOption) {
-            $sortOption = $sortOption['label'] ? $translate($sortOption['label']) : $name;
+        foreach ($sortOptions as &$sortOption) {
+            $sortOption = $translate($sortOption['label']);
         }
         unset($sortOption);
         $sortOptions = array_map($translate, $sortOptions);
@@ -80,7 +80,7 @@ class SearchSortSelector extends AbstractHelper
             if ($name === $currentSort) {
                 $currentSortUrl = $sortName;
             }
-            $sortOptions[$sortName] = $sortOption['label'] ? $translate($sortOption['label']) : $sortName;
+            $sortOptions[$sortName] = $translate($sortOption['label']);
         }
 
         return (new Select('sort'))

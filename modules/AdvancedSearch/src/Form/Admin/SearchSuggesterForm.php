@@ -2,7 +2,9 @@
 
 namespace AdvancedSearch\Form\Admin;
 
-use AdvancedSearch\Form\Element as AdvancedSearchElement;
+use AdvancedSearch\Form\Element\Note;
+use AdvancedSearch\Form\Element\OptionalRadio;
+use AdvancedSearch\Form\Element\OptionalSelect;
 use Laminas\Form\Element;
 use Laminas\Form\Fieldset;
 use Laminas\Form\Form;
@@ -55,7 +57,7 @@ class SearchSuggesterForm extends Form
         $this
             ->add([
                 'name' => 'o:engine',
-                'type' => AdvancedSearchElement\OptionalSelect::class,
+                'type' => OptionalSelect::class,
                 'options' => [
                     'label' => 'Search engine', // @translate
                     'value_options' => $this->getEnginesOptions(),
@@ -84,7 +86,7 @@ class SearchSuggesterForm extends Form
             $fieldset
                 ->add([
                     'name' => 'note',
-                    'type' => AdvancedSearchElement\Note::class,
+                    'type' => Note::class,
                     'options' => [
                         'text' => 'Only the internal adapter can have settings for now. For external suggesters, use the direct url in the search config.', // @translate
                     ],
@@ -108,7 +110,7 @@ class SearchSuggesterForm extends Form
             ])
             ->add([
                 'name' => 'mode_index',
-                'type' => AdvancedSearchElement\OptionalRadio::class,
+                'type' => OptionalRadio::class,
                 'options' => [
                     'label' => 'Mode to index values', // @translate
                     'value_options' => [
@@ -127,7 +129,7 @@ class SearchSuggesterForm extends Form
             ])
             ->add([
                 'name' => 'mode_search',
-                'type' => AdvancedSearchElement\OptionalRadio::class,
+                'type' => OptionalRadio::class,
                 'options' => [
                     'label' => 'Mode to search suggestions', // @translate
                     'value_options' => [
@@ -170,7 +172,7 @@ class SearchSuggesterForm extends Form
             ])
             ->add([
                 'name' => 'fields',
-                'type' => AdvancedSearchElement\OptionalSelect::class,
+                'type' => OptionalSelect::class,
                 'options' => [
                     'label' => 'Limit query to specific fields', // @translate
                     'info' => 'With the internal search engine, it is not recommended to use full text content.', // @translate
@@ -185,8 +187,8 @@ class SearchSuggesterForm extends Form
                 ],
             ])
             ->add([
-                'name' => 'excluded_fields',
-                'type' => AdvancedSearchElement\OptionalSelect::class,
+                'name' => 'exclude_fields',
+                'type' => OptionalSelect::class,
                 'options' => [
                     'label' => 'Exclude fields', // @translate
                     'info' => 'Allow to skip the full text content, that may be useless for suggestions.', // @translate
@@ -224,15 +226,22 @@ class SearchSuggesterForm extends Form
 
     protected function getAvailableFields(): array
     {
-        /** @var \AdvancedSearch\Api\Representation\SearchEngineRepresentation $searchEngine */
-        $searchEngine = $this->getOption('engine');
-        if (!$searchEngine) {
+        /** @var \AdvancedSearch\Api\Representation\SearchEngineRepresentation $engine */
+        $engine = $this->getOption('engine');
+        if (!$engine) {
             return [];
         }
 
-        $searchAdapter = $searchEngine->adapter();
-        return empty($searchAdapter)
-            ? []
-            : $searchAdapter->setSearchEngine($searchEngine)->getAvailableFieldsForSelect();
+        $searchAdapter = $engine->adapter();
+        if (empty($searchAdapter)) {
+            return [];
+        }
+
+        $options = [];
+        $fields = $searchAdapter->getAvailableFields($engine);
+        foreach ($fields as $name => $field) {
+            $options[$name] = $field['label'] ?? $name;
+        }
+        return $options;
     }
 }

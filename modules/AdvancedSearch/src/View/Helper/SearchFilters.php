@@ -7,267 +7,198 @@ use Omeka\Api\Exception\NotFoundException;
 
 /**
  * View helper for rendering search filters.
- *
- * Override core helper in order to add the urls without the filters.
- *
- * @see \Omeka\View\Helper\SearchFilters
  */
-class SearchFilters extends \Omeka\View\Helper\SearchFilters
+class SearchFilters extends AbstractHelper
 {
     /**
-     * @var string
+     * The default partial view script.
      */
-    protected $baseUrl;
+    const PARTIAL_NAME = 'common/search-filters';
 
     /**
-     * @var array
+     * Render filters from search query.
+     *
+     * @return array
      */
-    protected $query;
-
-    /**
-     * Render filters from search query, with urls if needed (if set in theme).
-     */
-    public function __invoke($partialName = null, array $query = null): string
+    public function __invoke($partialName = null)
     {
         $partialName = $partialName ?: self::PARTIAL_NAME;
 
-        $view = $this->getView();
-        $translate = $view->plugin('translate');
+        $translate = $this->getView()->plugin('translate');
 
         $filters = [];
-        $api = $view->api();
-        $query = $query ?? $view->params()->fromQuery();
-
-        $this->baseUrl = $this->view->url(null, [], true);
-        $this->query = $query;
-        unset(
-            $this->query['page'],
-            $this->query['offset'],
-            $this->query['submit'],
-            $this->query['__searchConfig'],
-            $this->query['__searchQuery']
-        );
-
+        $api = $this->getView()->api();
+        $query = $this->getView()->params()->fromQuery();
         $queryTypes = [
-            'eq' => $translate('is exactly'), // @translate
-            'neq' => $translate('is not exactly'), // @translate
-            'in' => $translate('contains'), // @translate
-            'nin' => $translate('does not contain'), // @translate
-            'sw' => $translate('starts with'), // @translate
-            'nsw' => $translate('does not start with'), // @translate
-            'ew' => $translate('ends with'), // @translate
-            'new' => $translate('does not end with'), // @translate
-            'res' => $translate('is resource with ID'), // @translate
-            'nres' => $translate('is not resource with ID'), // @translate
-            'ex' => $translate('has any value'), // @translate
-            'nex' => $translate('has no values'), // @translate
-            'lex' => $translate('is a linked resource'), // @translate
-            'nlex' => $translate('is not a linked resource'), // @translate
-            'lres' => $translate('is linked with resource with ID'), // @translate
-            'nlres' => $translate('is not linked with resource with ID'), // @translate
+            'eq' => $translate('is exactly'),
+            'neq' => $translate('is not exactly'),
+            'in' => $translate('contains'),
+            'nin' => $translate('does not contain'),
+            'sw' => $translate('starts with'),
+            'nsw' => $translate('does not start with'),
+            'ew' => $translate('ends with'),
+            'new' => $translate('does not end with'),
+            'res' => $translate('is resource with ID'),
+            'nres' => $translate('is not resource with ID'),
+            'ex' => $translate('has any value'),
+            'nex' => $translate('has no values'),
         ];
 
-        $withoutValueQueryTypes = [
-            'ex',
-            'nex',
-            'lex',
-            'nlex',
-        ];
-
-        foreach ($this->query as $key => $value) {
-            if ($value === null || $value === '' || $value === []) {
-                continue;
-            }
-
-            switch ($key) {
-                // Fulltext
-                case 'fulltext_search':
-                    $filterLabel = $translate('Search full-text');
-                    $filters[$filterLabel][$this->urlQuery($key)] = $value;
-                    break;
-
-                // Search by class
-                case 'resource_class_id':
-                    if (!is_array($value)) {
-                        $value = [$value];
-                    }
-                    $filterLabel = $translate('Class');
-                    foreach ($value as $subKey => $subValue) {
-                        if (!is_numeric($subValue)) {
-                            continue;
+        foreach ($query as $key => $value) {
+            if ($value != null) {
+                switch ($key) {
+                    // Search by class
+                    case 'resource_class_id':
+                        if (!is_array($value)) {
+                            $value = [$value];
                         }
-                        try {
-                            $filterValue = $translate($api->read('resource_classes', $subValue)->getContent()->label());
-                        } catch (NotFoundException $e) {
-                            $filterValue = $translate('Unknown class');
+                        foreach ($value as $subValue) {
+                            if (!is_numeric($subValue)) {
+                                continue;
+                            }
+                            $filterLabel = $translate('Class');
+                            try {
+                                $filterValue = $api->read('resource_classes', $subValue)->getContent()->label();
+                            } catch (NotFoundException $e) {
+                                $filterValue = $translate('Unknown class');
+                            }
+                            $filters[$filterLabel][] = $filterValue;
                         }
-                        $filters[$filterLabel][$this->urlQuery($key, $subKey)] = $filterValue;
-                    }
-                    break;
+                        break;
 
-                // Search values (by property or all)
-                case 'property':
-                    $index = 0;
-                    foreach ($value as $subKey => $queryRow) {
-                        if (!(is_array($queryRow)
-                            && array_key_exists('property', $queryRow)
-                            && array_key_exists('type', $queryRow)
-                        )) {
-                            continue;
-                        }
-                        $propertyId = $queryRow['property'];
-                        $queryType = $queryRow['type'];
-                        $joiner = $queryRow['joiner'] ?? null;
-                        $value = $queryRow['text'] ?? null;
+                    // Search values (by property or all)
+                    case 'property':
+                        $engine = 0;
+                        foreach ($value as $queryRow) {
+                            if (!(
+                                is_array($queryRow)
+                                && array_key_exists('property', $queryRow)
+                                && array_key_exists('type', $queryRow)
+                            )) {
+                                continue;
+                            }
+                            $propertyId = $queryRow['property'];
+                            $queryType = $queryRow['type'];
+                            $joiner = $queryRow['joiner'] ?? null;
+                            $value = $queryRow['text'] ?? null;
 
-                        if (!isset($queryTypes[$queryType])) {
-                            continue;
-                        }
-                        if (!$value && !in_array($queryType, $withoutValueQueryTypes, true)) {
-                            continue;
-                        }
-                        if ($propertyId) {
-                            if (is_numeric($propertyId)) {
-                                try {
-                                    $property = $api->read('properties', $propertyId)->getContent();
-                                } catch (NotFoundException $e) {
-                                    $property = null;
+                            if (!$value && $queryType !== 'nex' && $queryType !== 'ex') {
+                                continue;
+                            }
+                            if ($propertyId) {
+                                if (is_numeric($propertyId)) {
+                                    try {
+                                        $property = $api->read('properties', $propertyId)->getContent();
+                                    } catch (NotFoundException $e) {
+                                        $property = null;
+                                    }
+                                } else {
+                                    $property = $api->searchOne('properties', ['term' => $propertyId])->getContent();
+                                }
+
+                                if ($property) {
+                                    $propertyLabel = $translate($property->label());
+                                } else {
+                                    $propertyLabel = $translate('Unknown property');
                                 }
                             } else {
-                                $property = $api->searchOne('properties', ['term' => $propertyId])->getContent();
+                                $propertyLabel = $translate('[Any property]');
+                            }
+                            if (!isset($queryTypes[$queryType])) {
+                                continue;
+                            }
+                            $filterLabel = $propertyLabel . ' ' . $queryTypes[$queryType];
+                            if ($engine > 0) {
+                                if ($joiner === 'or') {
+                                    $filterLabel = $translate('OR') . ' ' . $filterLabel;
+                                } else {
+                                    $filterLabel = $translate('AND') . ' ' . $filterLabel;
+                                }
                             }
 
-                            if ($property) {
-                                $propertyLabel = $translate($property->label());
-                            } else {
-                                $propertyLabel = $translate('Unknown property');
+                            $filters[$filterLabel][] = $value;
+                            $engine++;
+                        }
+                        break;
+                    case 'search':
+                        $filterLabel = $translate('Search');
+                        $filters[$filterLabel][] = $value;
+                        break;
+
+                    // Search resource template
+                    case 'resource_template_id':
+                        if (!is_array($value)) {
+                            $value = [$value];
+                        }
+                        foreach ($value as $subValue) {
+                            if (!is_numeric($subValue)) {
+                                continue;
                             }
-                        } else {
-                            $propertyLabel = $translate('[Any property]');
-                        }
-                        $filterLabel = $propertyLabel . ' ' . $queryTypes[$queryType];
-                        if ($index > 0) {
-                            if ($joiner === 'or') {
-                                $filterLabel = $translate('OR') . ' ' . $filterLabel;
-                            } elseif ($joiner === 'not') {
-                                $filterLabel = $translate('EXCEPT') . ' ' . $filterLabel;
-                            } else {
-                                $filterLabel = $translate('AND') . ' ' . $filterLabel;
+                            $filterLabel = $translate('Template');
+                            try {
+                                $filterValue = $api->read('resource_templates', $subValue)->getContent()->label();
+                            } catch (NotFoundException $e) {
+                                $filterValue = $translate('Unknown template');
                             }
+                            $filters[$filterLabel][] = $filterValue;
                         }
+                        break;
 
-                        $filters[$filterLabel][$this->urlQuery($key, $subKey)] = $value;
-                        ++$index;
-                    }
-                    break;
-
-                case 'search':
-                    $filterLabel = $translate('Search');
-                    $filters[$filterLabel][$this->urlQuery($key)] = $value;
-                    break;
-
-                // Search resource template
-                case 'resource_template_id':
-                    if (!is_array($value)) {
-                        $value = [$value];
-                    }
-                    $filterLabel = $translate('Template');
-                    foreach ($value as $subKey => $subValue) {
-                        if (!is_numeric($subValue)) {
-                            continue;
+                    // Search item set
+                    case 'item_set_id':
+                        if (!is_array($value)) {
+                            $value = [$value];
                         }
+                        foreach ($value as $subValue) {
+                            if (!is_numeric($subValue)) {
+                                continue;
+                            }
+                            $filterLabel = $translate('Item set');
+                            try {
+                                $filterValue = $api->read('item_sets', $subValue)->getContent()->displayTitle();
+                            } catch (NotFoundException $e) {
+                                $filterValue = $translate('Unknown item set');
+                            }
+                            $filters[$filterLabel][] = $filterValue;
+                        }
+                        break;
+
+                    // Search user
+                    case 'owner_id':
+                        $filterLabel = $translate('User');
                         try {
-                            $filterValue = $api->read('resource_templates', $subValue)->getContent()->label();
+                            $filterValue = $api->read('users', $value)->getContent()->name();
                         } catch (NotFoundException $e) {
-                            $filterValue = $translate('Unknown template');
+                            $filterValue = $translate('Unknown user');
                         }
-                        $filters[$filterLabel][$this->urlQuery($key, $subKey)] = $filterValue;
-                    }
-                    break;
+                        $filters[$filterLabel][] = $filterValue;
+                        break;
 
-                // Search item set
-                case 'item_set_id':
-                    if (!is_array($value)) {
-                        $value = [$value];
-                    }
-                    $filterLabel = $translate('Item set');
-                    foreach ($value as $subKey => $subValue) {
-                        if (!is_numeric($subValue)) {
-                            continue;
-                        }
+                    case 'site_id':
+                        $filterLabel = $translate('Site');
                         try {
-                            $filterValue = $api->read('item_sets', $subValue)->getContent()->displayTitle();
-                        } catch (NotFoundException $e) {
-                            $filterValue = $translate('Unknown item set');
-                        }
-                        $filters[$filterLabel][$this->urlQuery($key, $subKey)] = $filterValue;
-                    }
-                    break;
-
-                // Search user
-                case 'owner_id':
-                    $filterLabel = $translate('User');
-                    try {
-                        $filterValue = $api->read('users', $value)->getContent()->name();
-                    } catch (NotFoundException $e) {
-                        $filterValue = $translate('Unknown user');
-                    }
-                    $filters[$filterLabel][$this->urlQuery($key)] = $filterValue;
-                    break;
-
-                // Search site
-                case 'site_id':
-                    if (!is_array($value)) {
-                        $value = [$value];
-                    }
-                    $filterLabel = $translate('Site');
-                    foreach ($value as $subKey => $subValue) {
-                        if (!is_numeric($subValue)) {
-                            continue;
-                        }
-                        try {
-                            $filterValue = $api->read('sites', ['id' => $subValue])->getContent()->title();
+                            $filterValue = $api->read('sites', $value)->getContent()->title();
                         } catch (NotFoundException $e) {
                             $filterValue = $translate('Unknown site');
                         }
-                        $filters[$filterLabel][$this->urlQuery($key, $subKey)] = $filterValue;
-                    }
-                    break;
-
-                default:
-                    break;
+                        $filters[$filterLabel][] = $filterValue;
+                        break;
+                }
             }
         }
 
-        $result = $view->trigger(
+        $result = $this->getView()->trigger(
             'view.search.filters',
-            ['filters' => $filters, 'query' => $query, 'baseUrl' => $this->baseUrl],
+            ['filters' => $filters, 'query' => $query],
             true
         );
         $filters = $result['filters'];
 
-        return $view->partial($partialName, [
-            'filters' => $filters,
-        ]);
-    }
-
-    /**
-     * Get url of the query without the specified key and subkey.
-     *
-     * @param string|int $key
-     * @param string|int|null $subKey
-     * @return string
-     */
-    protected function urlQuery($key, $subKey = null): string
-    {
-        $newQuery = $this->query;
-        if (is_null($subKey) || !is_array($newQuery[$key]) || count($newQuery[$key]) <= 1) {
-            unset($newQuery[$key]);
-        } else {
-            unset($newQuery[$key][$subKey]);
-        }
-        return $newQuery
-            ? $this->baseUrl . '?' . http_build_query($newQuery, '', '&', PHP_QUERY_RFC3986)
-            : $this->baseUrl;
+        return $this->getView()->partial(
+            $partialName,
+            [
+                'filters' => $filters,
+            ]
+        );
     }
 }

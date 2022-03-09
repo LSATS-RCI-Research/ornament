@@ -44,19 +44,10 @@ class SearchRequestToResponse extends AbstractPlugin
         $services = $searchConfig->getServiceLocator();
         $plugins = $services->get('ControllerPluginManager');
 
-        $formAdapterName = $searchConfig->formAdapterName();
-        if (!$formAdapterName) {
-            $message = new Message('This search config has no form adapter.'); // @translate
-            $plugins->get('logger')()->err($message);
-            return [
-                'status' => 'error',
-                'message' => $message,
-            ];
-        }
-
         /** @var \AdvancedSearch\FormAdapter\FormAdapterInterface $formAdapter */
         $formAdapter = $searchConfig->formAdapter();
         if (!$formAdapter) {
+            $formAdapterName = $searchConfig->formAdapterName();
             $message = new Message('Form adapter "%s" not found.', $formAdapterName); // @translate
             $plugins->get('logger')()->err($message);
             return [
@@ -76,40 +67,6 @@ class SearchRequestToResponse extends AbstractPlugin
 
         $searchFormSettings = $searchConfigSettings['form'] ?? [];
 
-        $searchEngine = $searchConfig->engine();
-        $searchAdapter = $searchEngine ? $searchEngine->adapter() : null;
-        if ($searchAdapter) {
-            $availableFields = $searchAdapter->setSearchEngine($searchEngine)->getAvailableFields();
-            // Include the specific fields to simplify querying with main form.
-            $searchFormSettings['available_fields'] = $availableFields;
-            $specialFieldsToInputFields = [
-                'resource_type' => 'resource_type',
-                'is_public' => 'is_public',
-                'owner/o:id' => 'owner',
-                'site/o:id' => 'site',
-                'resource_class/o:id' => 'class',
-                'resource_template/o:id' => 'template',
-                'item_set/o:id' => 'item_set',
-            ];
-            foreach ($availableFields as $field) {
-                if (!empty($field['from'])
-                    && isset($specialFieldsToInputFields[$field['from']])
-                    && empty($availableFields[$specialFieldsToInputFields[$field['from']]])
-                ) {
-                    $searchFormSettings['available_fields'][$specialFieldsToInputFields[$field['from']]] = [
-                        'name' => $specialFieldsToInputFields[$field['from']],
-                        'to' => $field['name'],
-                    ];
-                }
-            }
-        } else {
-            $searchFormSettings['available_fields'] = [];
-        }
-
-        // Solr doesn't allow unavailable args anymore (invalid or unknown).
-        $searchFormSettings['only_available_fields'] = $searchAdapter
-            && $searchAdapter instanceof \SearchSolr\Adapter\SolariumAdapter;
-
         // TODO Copy the option for per page in the search config form (keeping the default).
         // TODO Add a max per_page.
         if ($site) {
@@ -121,6 +78,9 @@ class SearchRequestToResponse extends AbstractPlugin
             $settings = $plugins->get('settings')();
             $perPage = (int) $settings->get('pagination_per_page', Paginator::PER_PAGE);
         }
+
+        // Fix to be removed.
+        $searchFormSettings['resource_fields'] = $searchConfigSettings['resource_fields'] ?? [];
         $searchFormSettings['search']['per_page'] = $perPage ?: Paginator::PER_PAGE;
 
         /** @var \AdvancedSearch\Query $query */
@@ -164,7 +124,7 @@ class SearchRequestToResponse extends AbstractPlugin
         $sort = $query->getSort();
         $sortOptions = $this->getSortOptions();
         if ($sort) {
-            if (empty($request['sort']) || !isset($sortOptions[$request['sort']])) {
+            if (!isset($sortOptions[$request['sort']])) {
                 reset($sortOptions);
                 $sort = key($sortOptions);
                 $query->setSort($sort);
@@ -267,7 +227,7 @@ class SearchRequestToResponse extends AbstractPlugin
                 // @see \Omeka\Api\Adapter\AbstractEntityAdapter::search().
                 'sort_by' => null,
                 'sort_order' => null,
-                // Used by Advanced Search.
+                // Used by Search.
                 'resource_type' => null,
                 'sort' => null,
             ]
@@ -310,7 +270,7 @@ class SearchRequestToResponse extends AbstractPlugin
         if (empty($engineAdapter)) {
             return [];
         }
-        $availableSortFields = $engineAdapter->setSearchEngine($this->searchEngine)->getAvailableSortFields();
+        $availableSortFields = $engineAdapter->getAvailableSortFields($this->searchEngine);
         return array_intersect_key($sortFieldsSettings, $availableSortFields);
     }
 }

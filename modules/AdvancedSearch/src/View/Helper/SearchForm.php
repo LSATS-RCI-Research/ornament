@@ -6,15 +6,10 @@ use AdvancedSearch\Api\Representation\SearchConfigRepresentation;
 use Laminas\Form\Form;
 use Laminas\View\Helper\AbstractHelper;
 
-/**
- * @todo Remove this view helper and use SearchConfigRepresentation::form() only.
- */
 class SearchForm extends AbstractHelper
 {
     /**
      * The default partial view script.
-     *
-     * With the default form, this is search/search-form-main.
      */
     const PARTIAL_NAME = 'search/search-form';
 

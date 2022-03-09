@@ -30,18 +30,8 @@
 
 namespace AdvancedSearch;
 
-use \Omeka\Api\Manager as ApiManager;
-
-/**
- * @todo Manage resources as a whole with a global order.
- */
 class Response implements \JsonSerializable
 {
-    /**
-     * @var \Omeka\Api\Manager
-     */
-    protected $api;
-
     /**
      * @var bool
      */
@@ -68,14 +58,6 @@ class Response implements \JsonSerializable
     protected $results = [];
 
     /**
-     * List of result ids for all pages, if stored by the querier.
-     * @todo Inverse process: manage output as a whole and if needed, order it by type.
-     *
-     * @var ?array
-     */
-    protected $allResouceIdsByResourceType = [];
-
-    /**
      * @var array
      */
     protected $activeFacets = [];
@@ -89,12 +71,6 @@ class Response implements \JsonSerializable
      * @var array
      */
     protected $suggestions = [];
-
-    public function setApi(ApiManager $api): self
-    {
-        $this->api = $api;
-        return $this;
-    }
 
     public function setIsSuccess(bool $isSuccess): self
     {
@@ -199,114 +175,6 @@ class Response implements \JsonSerializable
         return is_null($resourceType)
             ? $this->results
             : $this->results[$resourceType] ?? [];
-    }
-
-    /**
-     * Store all results ids for all resources, by type.
-     *
-     * @internal Currently experimental.
-     */
-    public function setAllResourceIds(array $idsByResourceType): self
-    {
-        $this->allResouceIdsByResourceType = $idsByResourceType;
-        return $this;
-    }
-
-    /**
-     * Store all results ids for a resource type.
-     *
-     * @param string|null $resourceType The resource type ("items", "item_sets"…).
-     * @param int[] $ids
-     * @internal Currently experimental.
-     */
-    public function setAllResourceIdsForResourceType(string $resourceType, array $ids): self
-    {
-        $this->allResouceIdsByResourceType[$resourceType] = array_values($ids);
-        return $this;
-    }
-
-    /**
-     * Get all resources ids for a resource type or all resource types.
-     *
-     * @param string|null $resourceType The resource type ("items", "item_sets"…).
-     * @return int[]|array
-     * @internal Currently experimental.
-     */
-    public function getAllResourceIds(string $resourceType = null): array
-    {
-        // When the querier doesn't fill whole list, return current page list.
-        if (!count($this->allResouceIdsByResourceType)) {
-            return $this->getResourceIds($resourceType);
-        }
-
-        return is_null($resourceType)
-            ? $this->allResouceIdsByResourceType
-            : $this->allResouceIdsByResourceType[$resourceType] ?? [];
-    }
-
-    /**
-     * Get resources ids for a resource type or all resource types.
-     *
-     * @param string|null $resourceType The resource type ("items", "item_sets"…).
-     * @return int[]
-     * @internal Currently experimental.
-     */
-    public function getResourceIds(string $resourceType = null): array
-    {
-        if ($resourceType) {
-            return array_column($this->getResults($resourceType), 'id');
-        }
-
-        $resources = [];
-        foreach (array_keys($this->results) as $resourceType) {
-            $resources = array_merge($resources, array_column($this->getResults($resourceType), 'id', 'id'));
-        }
-        return array_values($resources);
-    }
-
-    /**
-     * Get resources for a resource type or all resource types.
-     *
-     *When the indexation is not up to date, some resources may be removed or
-     *privated, so the result may be different from getResults().
-     *
-     * @todo Create api search for mixed resources in order to keep global order.
-     *
-     * @param string|null $resourceType The resource type ("items", "item_sets"…).
-     * @return \Omeka\Api\Representation\AbstractResourceEntityRepresentation[]
-     * When resources types are set and unique, the key is the id (that is the
-     * case with item and item set, not pages).
-     */
-    public function getResources(string $resourceType = null): array
-    {
-        if (!$this->api) {
-            return [];
-        }
-
-        if (!$resourceType) {
-            $resources = [];
-            foreach (array_keys($this->results) as $resourceType) {
-                $resources = array_replace($resources, $this->getResources($resourceType));
-            }
-            return $resources;
-        }
-
-        // Extract results as a whole to avoid subquery for each resource.
-        $ids = array_column($this->getResults($resourceType), 'id', 'id');
-        if (!count($ids)) {
-            return [];
-        }
-
-        // The sort order is unknown, so in order to keep order of results, use
-        // the id as key and use array_replace(). This process avoids to do a
-        // single read() for each result.
-        $resources = [];
-        foreach ($this->api->search($resourceType, ['id' => $ids])->getContent() as $resource) {
-            $resources[$resource->id()] = $resource;
-        }
-        return count($resources)
-            ? array_replace(array_intersect_key($ids, $resources), $resources)
-            : [];
     }
 
     /**

@@ -1,7 +1,8 @@
-<?php
+<?php declare(strict_types=1);
+
 /*
- * Copyright BibLibre, 2016-2017
- * Copyright Daniel Berthereau, 2017-2021
+ * Copyright BibLibre, 2017
+ * Copyright Daniel Berthereau, 2019
  *
  * This software is governed by the CeCILL license under French law and abiding
  * by the rules of distribution of free software.  You can use, modify and/ or
@@ -27,34 +28,18 @@
  * knowledge of the CeCILL license and that you accept its terms.
  */
 
-/**
- * @var \Laminas\View\Renderer\PhpRenderer $this
- * @var \AdvancedSearch\Api\Representation\SearchConfigRepresentation $searchConfig
- * @var \AdvancedSearch\Form\Admin\SearchConfigConfigureForm $form
- */
+namespace AdvancedSearch\Service\ViewHelper;
 
-$translate = $this->plugin('translate');
-$assetUrl = $this->plugin('assetUrl');
+use AdvancedSearch\View\Helper\FacetLink;
+use Interop\Container\ContainerInterface;
+use Laminas\ServiceManager\Factory\FactoryInterface;
 
-$this->headLink()
-    ->appendStylesheet($assetUrl('css/advanced-search-configure.css', 'AdvancedSearch'));
-$this->headScript()
-    ->appendFile($assetUrl('js/advanced-search-configure.js', 'AdvancedSearch'), 'text/javascript', ['defer' => 'defer']);
-;
-
-$engine = $searchConfig->engine();
-$adapter = $engine ? $engine->adapter() : null;
-if (empty($adapter)) {
-    return;
+class FacetLinkFactory implements FactoryInterface
+{
+    public function __invoke(ContainerInterface $container, $requestedName, array $options = null)
+    {
+        return new FacetLink(
+            $container->get('Application')
+        );
+    }
 }
-
-$form->prepare();
-?>
-
-<?= $this->pageTitle(sprintf($translate('Search page "%1$s" (%2$s)'), $searchConfig->name(), $searchConfig->path())) ?>
-
-<div id="page-actions">
-    <button form="search-form-configure"><?= $translate('Save page') ?></button>
-</div>
-
-<?= $this->form($form) ?>

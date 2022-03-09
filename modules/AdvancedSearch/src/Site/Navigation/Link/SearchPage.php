@@ -61,7 +61,7 @@ class SearchPage implements LinkInterface
 
     public function getFormTemplate()
     {
-        return 'common/navigation-link-form/search-page';
+        return 'advanced-search/navigation-link-form/search-page';
     }
 
     public function toZend(array $data, SiteRepresentation $site)

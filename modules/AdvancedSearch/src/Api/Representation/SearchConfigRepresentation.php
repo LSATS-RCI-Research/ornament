@@ -35,19 +35,9 @@ use Omeka\Api\Representation\AbstractEntityRepresentation;
 class SearchConfigRepresentation extends AbstractEntityRepresentation
 {
     /**
-     * @var bool
-     */
-    private $isFormInit = false;
-
-    /**
      * @var \AdvancedSearch\FormAdapter\FormAdapterInterface
      */
     protected $formAdapter;
-
-    /**
-     * @var \Laminas\Form\Form|null
-     */
-    protected $form;
 
     public function getJsonLdType()
     {
@@ -133,18 +123,35 @@ class SearchConfigRepresentation extends AbstractEntityRepresentation
 
     public function formAdapter(): ?\AdvancedSearch\FormAdapter\FormAdapterInterface
     {
-        if (!$this->isFormInit) {
-            $this->formInit();
+        if (!$this->formAdapter) {
+            $formAdapterManager = $this->getServiceLocator()->get('Search\FormAdapterManager');
+            $formAdapterName = $this->formAdapterName();
+            if ($formAdapterManager->has($formAdapterName)) {
+                $this->formAdapter = $formAdapterManager->get($formAdapterName);
+            }
         }
+
         return $this->formAdapter;
     }
 
     public function form(): ?\Laminas\Form\Form
     {
-        if (!$this->isFormInit) {
-            $this->formInit();
+        $formAdapter = $this->formAdapter();
+        if (empty($formAdapter)) {
+            return null;
         }
-        return $this->form;
+
+        $formClass = $formAdapter->getFormClass();
+        if (empty($formClass)) {
+            return null;
+        }
+
+        return $this->getServiceLocator()
+            ->get('FormElementManager')
+            ->get($formClass, [
+                'search_config' => $this,
+            ])
+            ->setAttribute('method', 'GET');
     }
 
     public function settings(): array
@@ -154,17 +161,14 @@ class SearchConfigRepresentation extends AbstractEntityRepresentation
 
     public function setting(string $name, $default = null)
     {
-        return $this->resource->getSettings()[$name] ?? $default;
+        $settings = $this->resource->getSettings();
+        return $settings[$name] ?? $default;
     }
 
     public function subSetting(string $mainName, string $name, $default = null)
     {
-        return $this->resource->getSettings()[$mainName][$name] ?? $default;
-    }
-
-    public function subSubSetting(string $mainName, string $name, string $subName, $default = null)
-    {
-        return $this->resource->getSettings()[$mainName][$name][$subName] ?? $default;
+        $settings = $this->resource->getSettings();
+        return $settings[$mainName][$name] ?? $default;
     }
 
     public function created(): \DateTime
@@ -180,33 +184,5 @@ class SearchConfigRepresentation extends AbstractEntityRepresentation
     public function getEntity(): \AdvancedSearch\Entity\SearchConfig
     {
         return $this->resource;
-    }
-
-    private function formInit(): self
-    {
-        $this->isFormInit = true;
-
-        $formAdapterManager = $this->getServiceLocator()->get('Search\FormAdapterManager');
-        $formAdapterName = $this->formAdapterName();
-        if (!$formAdapterManager->has($formAdapterName)) {
-            return $this;
-        }
-
-        $this->formAdapter = $formAdapterManager->get($formAdapterName);
-        $formClass = $this->formAdapter->getFormClass();
-        if (empty($formClass)) {
-            return $this;
-        }
-
-        $this->form = $this->getServiceLocator()
-            ->get('FormElementManager')
-            ->get($formClass, [
-                'search_config' => $this,
-            ])
-            ->setAttribute('method', 'GET');
-
-        $this->formAdapter->setForm($this->form);
-
-        return $this;
     }
 }

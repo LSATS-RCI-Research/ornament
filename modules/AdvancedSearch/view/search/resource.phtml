@@ -1,6 +1,6 @@
 <?php
 /*
- * Copyright BibLibre, 2016-2017
+ * Copyright BibLibre, 2016
  * Copyright Daniel Berthereau, 2017-2021
  *
  * This software is governed by the CeCILL license under French law and abiding
@@ -29,32 +29,32 @@
 
 /**
  * @var \Laminas\View\Renderer\PhpRenderer $this
- * @var \AdvancedSearch\Api\Representation\SearchConfigRepresentation $searchConfig
- * @var \AdvancedSearch\Form\Admin\SearchConfigConfigureForm $form
+ * @var \Omeka\Api\Representation\AbstractResourceEntityRepresentation $resource
+ * @var string $tag
  */
 
-$translate = $this->plugin('translate');
-$assetUrl = $this->plugin('assetUrl');
-
-$this->headLink()
-    ->appendStylesheet($assetUrl('css/advanced-search-configure.css', 'AdvancedSearch'));
-$this->headScript()
-    ->appendFile($assetUrl('js/advanced-search-configure.js', 'AdvancedSearch'), 'text/javascript', ['defer' => 'defer']);
-;
-
-$engine = $searchConfig->engine();
-$adapter = $engine ? $engine->adapter() : null;
-if (empty($adapter)) {
-    return;
-}
-
-$form->prepare();
+$plugins = $this->getHelperPluginManager();
+$translate = $plugins->get('translate');
+$hyperlink = $plugins->get('hyperlink');
 ?>
 
-<?= $this->pageTitle(sprintf($translate('Search page "%1$s" (%2$s)'), $searchConfig->name(), $searchConfig->path())) ?>
-
-<div id="page-actions">
-    <button form="search-form-configure"><?= $translate('Save page') ?></button>
-</div>
-
-<?= $this->form($form) ?>
+<?= sprintf('<%s class="%s resource">', $tag, $resource->resourceName()) ?>
+    <div class="resource-thumbnail">
+        <?php $media = $resource->primaryMedia(); ?>
+        <?= $hyperlink->raw(
+            $media
+                ? $this->thumbnail($media, 'square', ['title' => $media->displayTitle(), 'alt' => $media->mediaType() . ' thumbnail'])
+                : '<img src="' . $this->assetUrl('thumbnails/default.png', 'Omeka') . '" title="' . $translate('No media') . '"/>',
+            $resource->url(),
+            ['class' => 'resource-link']
+        ) ?>
+    </div>
+    <div class="resource-metadata">
+        <h4><?= $resource->link($resource->displayTitle()) ?></h4>
+        <?php if ($description = $resource->displayDescription()): ?>
+            <div class="description">
+                <?= $description ?>
+            </div>
+        <?php endif; ?>
+    </div>
+<?= sprintf('</%s>', $tag) ?>

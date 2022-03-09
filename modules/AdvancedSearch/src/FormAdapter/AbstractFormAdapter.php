@@ -33,20 +33,7 @@ use AdvancedSearch\Query;
 
 abstract class AbstractFormAdapter implements FormAdapterInterface
 {
-    protected $form;
-
     abstract public function getLabel(): string;
-
-    public function setForm(?\Laminas\Form\Form $form): \AdvancedSearch\FormAdapter\FormAdapterInterface
-    {
-        $this->form = $form;
-        return $this;
-    }
-
-    public function getForm(): ?\Laminas\Form\Form
-    {
-        return $this->form;
-    }
 
     public function getFormPartialHeaders(): ?string
     {
@@ -67,28 +54,8 @@ abstract class AbstractFormAdapter implements FormAdapterInterface
     {
         $query = new Query;
 
-        // Solr doesn't allow unavailable args anymore (invalid or unknown).
-        $onlyAvailableFields = !empty($formSettings['only_available_fields']);
-        if ($onlyAvailableFields) {
-            $availableFields = $formSettings['available_fields'] ?? [];
-            if ($availableFields) {
-                $checkAvailableField = function ($field) use ($availableFields) {
-                    return isset($availableFields[$field]);
-                };
-            } else {
-                $checkAvailableField = function ($field) {
-                    return false;
-                };
-            }
-        } else {
-            $checkAvailableField = function ($field) {
-                return true;
-            };
-        }
-
         // TODO Manage the "browse_attached_items" / "site_attachments_only".
 
-        // This function fixes some forms that add an array level.
         // This function manages only one level, so check value when needed.
         $flatArray = function ($value): array {
             if (!is_array($value)) {
@@ -125,16 +92,11 @@ abstract class AbstractFormAdapter implements FormAdapterInterface
             if ($value === '' || $value === [] || $value === null) {
                 continue;
             }
-            $name = (string) $name;
             switch ($name) {
                 case 'q':
                     $query->setQuery($request['q']);
                     continue 2;
 
-                // Special fields of the main form and internal adapter are
-                // managed here currently.
-
-                // Resource name in fact.
                 case 'resource_type':
                     if (!is_array($value)) {
                         $value = [$value];
@@ -142,31 +104,41 @@ abstract class AbstractFormAdapter implements FormAdapterInterface
                     $query->setResources($value);
                     break;
 
-                case 'id':
+                case 'is_public':
+                    if (is_string($value) && strlen($value)) {
+                        $nameFilter = empty($formSettings['resource_fields']['is_public_field']) ? 'is_public': $formSettings['resource_fields']['is_public_field'];
+                        $query->addFilter($nameFilter, (bool) $value);
+                    }
+                    continue 2;
+
+                case 'resource':
                     $valueArray = $flatArray($value);
                     $query->addFilter('id', $valueArray);
                     continue 2;
 
-                // Specific fields.
-
-                case 'is_public':
-                    if (is_string($value)
-                        && strlen($value)
-                        && isset($formSettings['available_fields'][$name]['to'])
-                    ) {
-                        $query->addFilter($formSettings['available_fields'][$name]['to'], (bool) $value);
-                    }
+                case 'item_set':
+                    $nameFilter = empty($formSettings['resource_fields']['item_set_id_field']) ? 'item_set_id': $formSettings['resource_fields']['item_set_id_field'];
+                    $valueArray = $flatArray($value);
+                    $query->addFilter($nameFilter, $valueArray);
                     continue 2;
 
-                case 'site':
-                case 'owner':
                 case 'class':
+                    $nameFilter = empty($formSettings['resource_fields']['resource_class_id_field']) ? 'resource_class_id': $formSettings['resource_fields']['resource_class_id_field'];
+                    $valueArray = $flatArray($value);
+                    $query->addFilter($nameFilter, $valueArray);
+                    continue 2;
+
                 case 'template':
-                case 'item_set':
-                    if (isset($formSettings['available_fields'][$name]['to'])) {
-                        $valueArray = $flatArray($value);
-                        $query->addFilter($formSettings['available_fields'][$name]['to'], $valueArray);
-                    }
+                    $nameFilter = empty($formSettings['resource_fields']['resource_template_id_field']) ? 'resource_class_id': $formSettings['resource_fields']['resource_template_id_field'];
+                    $valueArray = $flatArray($value);
+                    $query->addFilter($nameFilter, $valueArray);
+                    continue 2;
+
+                // TODO Manage query on owner (only one in core).
+                case 'owner':
+                    $nameFilter = empty($formSettings['resource_fields']['owner_id_field']) ? 'owner_id': $formSettings['resource_fields']['owner_id_field'];
+                    $valueArray = $flatArray($value);
+                    $query->addFilter($nameFilter, $valueArray);
                     continue 2;
 
                 case 'filter':
@@ -181,18 +153,16 @@ abstract class AbstractFormAdapter implements FormAdapterInterface
                         }
                     }
 
-                    // TODO The filter field can be multiple.
-
                     if (empty($joiner)) {
                         if (empty($operator)) {
                             foreach ($value as $filter) {
-                                if (isset($filter['field']) && isset($filter['value']) && trim($filter['value']) !== '' && $checkAvailableField($filter['field'])) {
+                                if (isset($filter['field']) && isset($filter['value']) && trim($filter['value']) !== '') {
                                     $query->addFilter($filter['field'], $filter['value']);
                                 }
                             }
                         } else {
                             foreach ($value as $filter) {
-                                if (isset($filter['field']) && $checkAvailableField($filter['field'])) {
+                                if (isset($filter['field'])) {
                                     $type = empty($filter['type']) ? 'in' : $filter['type'];
                                     if ($type === 'ex' || $type === 'nex') {
                                         $query->addFilterQuery($filter['field'], null, $type);
@@ -205,20 +175,20 @@ abstract class AbstractFormAdapter implements FormAdapterInterface
                     } else {
                         if (empty($operator)) {
                             foreach ($value as $filter) {
-                                if (isset($filter['field']) && isset($filter['value']) && trim($filter['value']) !== '' && $checkAvailableField($filter['field'])) {
-                                    $join = isset($filter['join']) && in_array($filter['join'], ['or', 'not']) ? $filter['join'] : 'and';
+                                if (isset($filter['field']) && isset($filter['value']) && trim($filter['value']) !== '') {
+                                    $join = isset($filter['join']) && $filter['join'] === 'or' ? 'or' : 'and';
                                     $query->addFilterQuery($filter['field'], $filter['value'], $type, $join);
                                 }
                             }
                         } else {
                             foreach ($value as $filter) {
-                                if (isset($filter['field']) && $checkAvailableField($filter['field'])) {
+                                if (isset($filter['field'])) {
                                     $type = empty($filter['type']) ? 'in' : $filter['type'];
                                     if ($type === 'ex' || $type === 'nex') {
-                                        $join = isset($filter['join']) && in_array($filter['join'], ['or', 'not']) ? $filter['join'] : 'and';
+                                        $join = isset($filter['join']) && $filter['join'] === 'or' ? 'or' : 'and';
                                         $query->addFilterQuery($filter['field'], null, $type, $join);
                                     } elseif (isset($filter['value']) && trim($filter['value']) !== '') {
-                                        $join = isset($filter['join']) && in_array($filter['join'], ['or', 'not']) ? $filter['join'] : 'and';
+                                        $join = isset($filter['join']) && $filter['join'] === 'or' ? 'or' : 'and';
                                         $query->addFilterQuery($filter['field'], $filter['value'], $type, $join);
                                     }
                                 }
@@ -272,42 +242,10 @@ abstract class AbstractFormAdapter implements FormAdapterInterface
                     break;
 
                 default:
-                    if (!$checkAvailableField($name)) {
-                        continue 2;
-                    }
-
                     if (is_string($value)
                         || $isSimpleList($value)
                     ) {
-                        // Manage simple field "Text", that should not be
-                        // "equals" ("eq"), but "contains" ("in"), and that is
-                        // managed in the form as a simple filter, not an
-                        // advanced filter query.
-                        // Other fields are predefined.
-                        // TODO Don't check form, but settings['filters'] with field = name and type.
-                        // TODO Simplify these checks (or support multi-values anywhere).
-                        $valueArray = $flatArray($value);
-                        if ($this->form
-                            && $this->form->has($name)
-                            && ($element = $this->form->get($name)) instanceof \Laminas\Form\Element\Text
-                        ) {
-                            if ($element instanceof \AdvancedSearch\Form\Element\TextExact
-                                || $element instanceof \AdvancedSearch\Form\Element\MultiText
-                            ) {
-                                foreach ($valueArray as $val) {
-                                    $query->addFilter($name, $val);
-                                }
-                            } else {
-                                // Included \AdvancedSearch\Form\Element\MultiText.
-                                foreach ($valueArray as $val) {
-                                    $query->addFilterQuery($name, $val);
-                                }
-                            }
-                        } else {
-                            foreach ($valueArray as $val) {
-                                $query->addFilter($name, $val);
-                            }
-                        }
+                        $query->addFilter($name, $value);
                         continue 2;
                     }
 
@@ -336,14 +274,12 @@ abstract class AbstractFormAdapter implements FormAdapterInterface
             }
         }
 
-        // $page, $perPage, $offset, $limit are null or int, but not settings.
-        $formSettings['search']['per_page'] = empty($formSettings['search']['per_page']) ? null : (int) $formSettings['search']['per_page'];
         if ($page || empty($offset)) {
             $page = $page ?? 1;
-            $perPage = $perPage ?? $limit ?? $formSettings['search']['per_page'] ?? \Omeka\Stdlib\Paginator::PER_PAGE;
+            $perPage = $perPage ?? $limit ?? $formSettings['per_page'] ?? \Omeka\Stdlib\Paginator::PER_PAGE;
             $query->setLimitPage($page, $perPage);
         } else {
-            $limit = $limit ?? $perPage ?? $formSettings['search']['per_page'] ?? \Omeka\Stdlib\Paginator::PER_PAGE;
+            $limit = $limit ?? $perPage ?? $formSettings['per_page'] ?? \Omeka\Stdlib\Paginator::PER_PAGE;
             $query->setLimitOffset($offset, $perPage);
         }
 

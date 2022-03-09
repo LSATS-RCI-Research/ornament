@@ -121,14 +121,6 @@ class Module extends AbstractModule
                 'To be automatically upgraded and replaced by this module, the module "Search" should be updated first to version 3.5.23.3 or greater.' // @translate
             );
         }
-
-        $module = $moduleManager->getModule('AdvancedSearch');
-        $version = $module ? $module->getIni('version') : null;
-        if (version_compare($version, '3.3.6.6', '>')) {
-            throw new \Omeka\Module\Exception\ModuleCannotInstallException(
-                'To be automatically upgraded and replaced by this module, use version 3.3.6.6 or below.' // @translate
-            );
-        }
     }
 
     protected function postInstall(): void
@@ -145,46 +137,41 @@ class Module extends AbstractModule
 
         // Upgrade from old modules AdvancedSearchPlus and Search.
 
-        $module = $moduleManager->getModule('AdvancedSearch');
-        $version = $module ? $module->getIni('version') : null;
-        if (version_compare($version, '3.3.6.6', '<=')) {
-            $module = $moduleManager->getModule('AdvancedSearchPlus');
-            if ($module && in_array($module->getState(), [
-                \Omeka\Module\Manager::STATE_ACTIVE,
-                \Omeka\Module\Manager::STATE_NOT_ACTIVE,
-                \Omeka\Module\Manager::STATE_NEEDS_UPGRADE,
-            ])) {
-                try {
-                    $filepath = $this->modulePath() . '/data/scripts/upgrade_from_advancedsearchplus.php';
-                    require_once $filepath;
-                } catch (\Exception $e) {
-                    $message = new Message(
-                        'An error occurred during migration of module "%s". Check the config and uninstall it manually.', // @translate
-                        'AdvancedSearchPlus'
-                    );
-                    $messenger->addError($message);
-                }
+        $module = $moduleManager->getModule('AdvancedSearchPlus');
+        if ($module && in_array($module->getState(), [
+            \Omeka\Module\Manager::STATE_ACTIVE,
+            \Omeka\Module\Manager::STATE_NOT_ACTIVE,
+            \Omeka\Module\Manager::STATE_NEEDS_UPGRADE,
+        ])) {
+            try {
+                $filepath = $this->modulePath() . '/data/scripts/upgrade_from_advancedsearchplus.php';
+                require_once $filepath;
+            } catch (\Exception $e) {
+                $message = new Message(
+                    'An error occurred during migration of module "%s". Check the config and uninstall it manually.', // @translate
+                    'AdvancedSearchPlus',
+                );
+                $messenger->addError($message);
             }
+        }
 
-            $module = $moduleManager->getModule('Search');
-            if ($module && in_array($module->getState(), [
-                \Omeka\Module\Manager::STATE_ACTIVE,
-                \Omeka\Module\Manager::STATE_NOT_ACTIVE,
-                \Omeka\Module\Manager::STATE_NEEDS_UPGRADE,
-            ])) {
-                try {
-                    $filepath = $this->modulePath() . '/data/scripts/upgrade_from_search.php';
-                    require_once $filepath;
-                } catch (\Exception $e) {
-                    $message = new Message(
-                        'An error occurred during migration of module "%s". Check the config and uninstall it manually.', // @translate
-                        'Search'
-                    );
-                    $messenger->addError($message);
-                }
+        $module = $moduleManager->getModule('Search');
+        if ($module && in_array($module->getState(), [
+            \Omeka\Module\Manager::STATE_ACTIVE,
+            \Omeka\Module\Manager::STATE_NOT_ACTIVE,
+            \Omeka\Module\Manager::STATE_NEEDS_UPGRADE,
+        ])) {
+            try {
+                $filepath = $this->modulePath() . '/data/scripts/upgrade_from_search.php';
+                require_once $filepath;
+            } catch (\Exception $e) {
+                $message = new Message(
+                    'An error occurred during migration of module "%s". Check the config and uninstall it manually.', // @translate
+                    'Search',
+                );
+                $messenger->addError($message);
             }
         } else {
-            $messenger->addWarning('The modules Search, Advanced Search Plus, PSL Search Form, Search Solr cannot be upgraded with a version of Advanced Search greater than 3.3.6.6.'); // @translate
             $this->installResources();
         }
 
@@ -216,7 +203,7 @@ class Module extends AbstractModule
         if ($module) {
             $sql = 'DELETE FROM `module` WHERE `id` = "PslSearchForm";';
             $connection = $services->get('Omeka\Connection');
-            $connection->executeStatement($sql);
+            $connection->executeUpdate($sql);
             $message = new Message(
                 'The module "%s" was upgraded by module "%s" and uninstalled.', // @translate
                 'PslSearchForm', 'Advanced Search'
@@ -318,13 +305,6 @@ class Module extends AbstractModule
                 -100
             );
         }
-
-        // The search pages use the core process to display used filters.
-        $sharedEventManager->attach(
-            \AdvancedSearch\Controller\IndexController::class,
-            'view.search.filters',
-            [$this, 'filterSearchFilters']
-        );
 
         // Listeners for the indexing for items, item sets and media.
 
@@ -428,33 +408,32 @@ class Module extends AbstractModule
 
     protected function addAclRules(): void
     {
-        /** @var \Omeka\Permissions\Acl $acl */
         $acl = $this->getServiceLocator()->get('Omeka\Acl');
         $acl
-            // All can search and suggest, only admins can admin (by default).
+            // Suggesters are available only for admins.
+            // TODO This first rule duplicates the second, but is needed for a site.
             ->allow(
                 null,
                 [
                     \AdvancedSearch\Controller\IndexController::class,
-                ]
-            )
-            // To search require read/search access to adapter.
-            ->allow(
-                null,
-                [
                     \AdvancedSearch\Api\Adapter\SearchConfigAdapter::class,
                     \AdvancedSearch\Api\Adapter\SearchEngineAdapter::class,
-                    \AdvancedSearch\Api\Adapter\SearchSuggesterAdapter::class,
                 ],
                 ['read', 'search']
             )
-            // To search require read access to entities.
+            ->allow(
+                null,
+                [
+                    \AdvancedSearch\Controller\IndexController::class,
+                    \AdvancedSearch\Api\Adapter\SearchConfigAdapter::class,
+                    \AdvancedSearch\Api\Adapter\SearchEngineAdapter::class,
+                ]
+            )
             ->allow(
                 null,
                 [
                     \AdvancedSearch\Entity\SearchConfig::class,
                     \AdvancedSearch\Entity\SearchEngine::class,
-                    \AdvancedSearch\Entity\SearchSuggester::class,
                 ],
                 ['read']
             );
@@ -478,22 +457,13 @@ class Module extends AbstractModule
         $settings = $services->get('Omeka\Settings');
         $searchConfigs = $settings->get('advancedsearch_all_configs', []);
 
-        // A specific check to manage site admin or public site.
-        $siteSlug = $status->getRouteParam('site-slug');
-
         $isAdminRequest = $status->isAdminRequest();
         if ($isAdminRequest) {
-            $baseRoutes = ['search-admin-page-'];
-            // Quick check if this is a site admin page. The list is required to
-            // create the navigation.
-            if ($siteSlug) {
-                $baseRoutes[] = 'search-page-';
-            }
             $adminSearchConfigs = $settings->get('advancedsearch_configs', []);
             $adminSearchConfigs = array_intersect_key($searchConfigs, array_flip($adminSearchConfigs));
-            foreach ($baseRoutes as $baseRoute) foreach ($adminSearchConfigs as $searchConfigId => $searchConfigSlug) {
+            foreach ($adminSearchConfigs as $searchConfigId => $searchConfigSlug) {
                 $router->addRoute(
-                    $baseRoute . $searchConfigId,
+                    'search-admin-page-' . $searchConfigId,
                     [
                         'type' => \Laminas\Router\Http\Segment::class,
                         'options' => [
@@ -522,12 +492,13 @@ class Module extends AbstractModule
                                 ],
                             ],
                         ],
-                    ]
+                    ],
                 );
             }
             return;
         }
 
+        $siteSlug = $status->getRouteParam('site-slug');
         if (!$siteSlug) {
             return;
         }
@@ -584,7 +555,7 @@ class Module extends AbstractModule
                             ],
                         ],
                     ],
-                ]
+                ],
             );
         }
     }
@@ -626,20 +597,14 @@ class Module extends AbstractModule
     {
         // Adapted from the advanced-search/properties.phtml template.
 
-        // The advanced search form can be used anywhere, so load it in all cases.
-        $view = $event->getTarget();
-        $assetUrl = $view->plugin('assetUrl');
-        $view->headLink()
-            ->appendStylesheet($assetUrl('vendor/chosen-js/chosen.css', 'Omeka'));
-        $view->headScript()
-            ->appendFile($assetUrl('vendor/chosen-js/chosen.jquery.js', 'Omeka'), 'text/javascript', ['defer' => 'defer'])
-            ->appendFile($assetUrl('js/search.js', 'AdvancedSearch'), 'text/javascript', ['defer' => 'defer']);
-
-        // For the main search field in the left sidebar in admin.
         if ($this->getServiceLocator()->get('Omeka\Status')->isAdminRequest()) {
+            $view = $event->getTarget();
+            $assetUrl = $view->plugin('assetUrl');
             $view->headLink()
+                ->appendStylesheet($assetUrl('vendor/chosen-js/chosen.css', 'Omeka'))
                 ->appendStylesheet($assetUrl('css/advanced-search-admin.css', 'AdvancedSearch'));
             $view->headScript()
+                ->appendFile($assetUrl('vendor/chosen-js/chosen.jquery.js', 'Omeka'), 'text/javascript', ['defer' => 'defer'])
                 ->appendFile($assetUrl('js/advanced-search-admin.js', 'AdvancedSearch'), 'text/javascript', ['defer' => 'defer']);
         }
 
@@ -708,7 +673,6 @@ class Module extends AbstractModule
     /**
      * Filter search filters.
      *
-     * @see \Omeka\View\Helper\SearchFilters
      * @param Event $event
      */
     public function filterSearchFilters(Event $event): void
@@ -719,559 +683,103 @@ class Module extends AbstractModule
         }
 
         $view = $event->getTarget();
-        $api = $view->plugin('api');
         $translate = $view->plugin('translate');
-
-        // Only non-core querying.
-        $queryTypes = [
-            'list' => $translate('is in list'), // @translate
-            'nlist' => $translate('is not in list'), // @translate
-            'sw' => $translate('starts with'), // @translate
-            'nsw' => $translate('does not start with'), // @translate
-            'ew' => $translate('ends with'), // @translate
-            'new' => $translate('does not end with'), // @translate
-            'res' => $translate('is resource with ID'), // @translate
-            'nres' => $translate('is not resource with ID'), // @translate
-            'lex' => $translate('is a linked resource'), // @translate
-            'nlex' => $translate('is not a linked resource'), // @translate
-            'lres' => $translate('is linked with resource with ID'), // @translate
-            'nlres' => $translate('is not linked with resource with ID'), // @translate
-        ];
-
-        $reciprocalQueryTypes = [
-            'list' => 'nlist',
-            'nlist' => 'list',
-            'sw' => 'nsw',
-            'nsw' => 'sw',
-            'ew' => 'new',
-            'new' => 'ew',
-            'lex' => 'nlex',
-            'nlex' => 'lex',
-            'lres' => 'nlres',
-            'nlres' => 'lres',
-        ];
-
-        $withoutValue = [
-            'lex',
-            'nlex',
-        ];
-
         $filters = $event->getParam('filters');
 
-        $this->baseUrl = $event->getParam('baseUrl');
+        $query = $this->searchResourcesListener->normalizeQueryDateTime($query);
+        if (!empty($query['datetime'])) {
+            $queryTypes = [
+                'gt' => $translate('after'),
+                'gte' => $translate('after or on'),
+                'eq' => $translate('on'),
+                'neq' => $translate('not on'),
+                'lte' => $translate('before or on'),
+                'lt' => $translate('before'),
+                'ex' => $translate('has any date / time'),
+                'nex' => $translate('has no date / time'),
+            ];
 
-        $this->query = $this->searchResourcesListener->normalizeQueryDateTime($query);
-        unset(
-            $this->query['page'],
-            $this->query['offset'],
-            $this->query['submit'],
-            $this->query['__searchConfig'],
-            $this->query['__searchQuery']
-        );
+            $value = $query['datetime'];
+            $engine = 0;
+            foreach ($value as $queryRow) {
+                $joiner = $queryRow['joiner'];
+                $field = $queryRow['field'];
+                $type = $queryRow['type'];
+                $datetimeValue = $queryRow['value'];
 
-        // This function fixes some forms that add an array level.
-        // This function manages only one level, so check value when needed.
-        $flatArray = function ($value): array {
-            if (!is_array($value)) {
-                return [$value];
-            }
-            $firstKey = key($value);
-            if (is_numeric($firstKey)) {
-                return $value;
-            }
-            return is_array(reset($value)) ? $value[$firstKey] : [$value[$firstKey]];
-        };
-
-        foreach ($this->query as $key => $value) {
-            if ($value === null || $value === '' || $value === []) {
-                continue;
-            }
-
-            switch ($key) {
-                case 'property':
-                    // TODO The array may be more than zero when firsts are standard (see core too for inverse).
-                    $index = 0;
-                    foreach (array_filter($value, 'is_array') as $subKey => $queryRow) {
-                        $queryType = $queryRow['type'] ?? 'eq';
-                        if (!isset($reciprocalQueryTypes[$queryType])) {
-                            continue;
-                        }
-
-                        $propertyId = $queryRow['property'] ?? null;
-                        $joiner = $queryRow['joiner'] ?? 'and';
-                        $value = $queryRow['value'] ?? '';
-
-                        $isWithoutValue = in_array($queryType, $withoutValue, true);
-
-                        // A value can be an array with types "list" and "nlist".
-                        if (!is_array($value)
-                            && !strlen((string) $value)
-                            && !$isWithoutValue
-                        ) {
-                            continue;
-                        }
-
-                        if ($isWithoutValue) {
-                            $value = '';
-                        }
-
-                        if ($propertyId) {
-                            if (is_numeric($propertyId)) {
-                                try {
-                                    $property = $api->read('properties', $propertyId)->getContent();
-                                } catch (NotFoundException $e) {
-                                    $property = null;
-                                }
-                            } else {
-                                $property = $api->searchOne('properties', ['term' => $propertyId])->getContent();
-                            }
-
-                            if ($property) {
-                                $propertyLabel = $translate($property->label());
-                            } else {
-                                $propertyLabel = $translate('Unknown property');
-                            }
-                        } else {
-                            $propertyLabel = $translate('[Any property]');
-                        }
-
-                        $filterLabel = $propertyLabel . ' ' . $queryTypes[$queryType];
-                        if ($index > 0) {
-                            if ($joiner === 'or') {
-                                $filterLabel = $translate('OR') . ' ' . $filterLabel;
-                            } elseif ($joiner === 'not') {
-                                $filterLabel = $translate('EXCEPT') . ' ' . $filterLabel; // @translate
-                            } else {
-                                $filterLabel = $translate('AND') . ' ' . $filterLabel;
-                            }
-                        }
-
-                        $filters[$filterLabel][] = implode(', ', $flatArray($value));
-
-                        ++$index;
+                $fieldLabel = $field === 'modified' ? $translate('Modified') : $translate('Created');
+                $filterLabel = $fieldLabel . ' ' . $queryTypes[$type];
+                if ($engine > 0) {
+                    if ($joiner === 'or') {
+                        $filterLabel = $translate('OR') . ' ' . $filterLabel;
+                    } else {
+                        $filterLabel = $translate('AND') . ' ' . $filterLabel;
                     }
-                    break;
-
-                case 'datetime':
-                    $queryTypes = [
-                        'gt' => $translate('after'),
-                        'gte' => $translate('after or on'),
-                        'eq' => $translate('on'),
-                        'neq' => $translate('not on'),
-                        'lte' => $translate('before or on'),
-                        'lt' => $translate('before'),
-                        'ex' => $translate('has any date / time'),
-                        'nex' => $translate('has no date / time'),
-                    ];
-
-                    $value = $this->query['datetime'];
-                    $engine = 0;
-                    foreach ($value as $subKey => $queryRow) {
-                        $joiner = $queryRow['joiner'];
-                        $field = $queryRow['field'];
-                        $type = $queryRow['type'];
-                        $datetimeValue = $queryRow['value'];
-
-                        $fieldLabel = $field === 'modified' ? $translate('Modified') : $translate('Created');
-                        $filterLabel = $fieldLabel . ' ' . $queryTypes[$type];
-                        if ($engine > 0) {
-                            if ($joiner === 'or') {
-                                $filterLabel = $translate('OR') . ' ' . $filterLabel;
-                            } elseif ($joiner === 'not') {
-                                $filterLabel = $translate('EXCEPT') . ' ' . $filterLabel; // @translate
-                            } else {
-                                $filterLabel = $translate('AND') . ' ' . $filterLabel;
-                            }
-                        }
-                        $filters[$filterLabel][$this->urlQuery($key, $subKey)] = $datetimeValue;
-                        ++$engine;
-                    }
-                    break;
-
-                case 'is_public':
-                    $filters[$translate('Visibility')][$this->urlQuery($key)] = $value
-                        ? $translate('Public')
-                        : $translate('Private');
-                    break;
-
-                case 'resource_class_term':
-                    $filterLabel = $translate('Class'); // @translate
-                    foreach ($flatArray($value) as $subKey => $subValue) {
-                        $filters[$filterLabel][$this->urlQuery($key, $subKey)] = $subValue;
-                    }
-                    break;
-
-                case 'has_media':
-                    $filterLabel = $translate('Has media'); // @translate
-                    $filters[$filterLabel][$this->urlQuery($key)] = $value
-                        ? $translate('yes') // @translate
-                        : $translate('no'); // @translate
-                    break;
-
-                case 'has_original':
-                    $filterLabel = $translate('Has original'); // @translate
-                    $filters[$filterLabel][$this->urlQuery($key)] = $value
-                        ? $translate('yes') // @translate
-                        : $translate('no'); // @translate
-                    break;
-
-                case 'has_thumbnails':
-                    $filterLabel = $translate('Has thumbnails'); // @translate
-                    $filters[$filterLabel][$this->urlQuery($key)] = $value
-                        ? $translate('yes') // @translate
-                        : $translate('no'); // @translate
-                    break;
-
-                case 'media_types':
-                    $filterLabel = $translate('Media types'); // @translate
-                    foreach ($flatArray($value) as $subKey => $subValue) {
-                        $filters[$filterLabel][$this->urlQuery($key, $subKey)] = $subValue;
-                    }
-                    break;
-
-                // The query "item_set_id" is already managed by the main search filter.
-
-                default:
-                    break;
+                }
+                $filters[$filterLabel][] = $datetimeValue;
+                ++$engine;
             }
         }
 
-        if (isset($query['__searchConfig'])) {
-            $filters = $this->filterSearchingFilters($query, $filters);
+        if (isset($query['is_public']) && $query['is_public'] !== '') {
+            $value = $query['is_public'] === '0' ? $translate('Private') : $translate('Public');
+            $filters[$translate('Visibility')][] = $value;
         }
+
+        if (isset($query['resource_class_term'])) {
+            $value = $query['resource_class_term'];
+            if ($value) {
+                $filterLabel = $translate('Class'); // @translate
+                $filters[$filterLabel][] = $value;
+            }
+        }
+
+        if (isset($query['has_media'])) {
+            $value = $query['has_media'];
+            if ($value) {
+                $filterLabel = $translate('Has media'); // @translate
+                $filters[$filterLabel][] = $translate('yes'); // @translate
+            } elseif ($value !== '') {
+                $filterLabel = $translate('Has media'); // @translate
+                $filters[$filterLabel][] = $translate('no'); // @translate
+            }
+        }
+
+        if (isset($query['has_original'])) {
+            $value = $query['has_original'];
+            if ($value) {
+                $filterLabel = $translate('Has original'); // @translate
+                $filters[$filterLabel][] = $translate('yes'); // @translate
+            } elseif ($value !== '') {
+                $filterLabel = $translate('Has original'); // @translate
+                $filters[$filterLabel][] = $translate('no'); // @translate
+            }
+        }
+
+        if (isset($query['has_thumbnails'])) {
+            $value = $query['has_thumbnails'];
+            if ($value) {
+                $filterLabel = $translate('Has thumbnails'); // @translate
+                $filters[$filterLabel][] = $translate('yes'); // @translate
+            } elseif ($value !== '') {
+                $filterLabel = $translate('Has thumbnails'); // @translate
+                $filters[$filterLabel][] = $translate('no'); // @translate
+            }
+        }
+
+        if (!empty($query['media_types'])) {
+            $value = is_array($query['media_types'])
+                ? $query['media_types']
+                : [$query['media_types']];
+            foreach ($value as $subValue) {
+                $filterLabel = $translate('Media types'); // @translate
+                $filters[$filterLabel][] = $subValue;
+            }
+        }
+
+        // The query "item_set_id" is already managed by the main search filter.
 
         $event->setParam('filters', $filters);
-    }
-
-    /**
-     * Manage specific arguments of the module searching form.
-     *
-     * @todo Should use the form adapter (but only main form is really used).
-     * @see \AdvancedSearch\FormAdapter\AbstractFormAdapter
-     */
-    protected function filterSearchingFilters(array $query, array $filters): array
-    {
-        $plugins = $this->getServiceLocator()->get('ControllerPluginManager');
-        $translate = $plugins->get('translate');
-        $api = $plugins->get('api');
-
-        /** @var \AdvancedSearch\Api\Representation\SearchConfigRepresentation $searchConfig */
-        $searchConfig = $query['__searchConfig'];
-        $searchEngine = $searchConfig->engine();
-        $searchAdapter = $searchEngine->adapter();
-        $availableFields = empty($searchAdapter)
-            ? []
-            : $searchAdapter->setSearchEngine($searchEngine)->getAvailableFields();
-        $searchFormSettings = $searchConfig->setting('form') ?: [];
-
-        // Manage all fields, included those not in the form in order to support
-        // queries for long term. But use labels set in the form if any.
-        $formFieldLabels = array_column($searchFormSettings['filters'], 'label', 'field');
-        $availableFieldLabels = array_combine(array_keys($availableFields), array_column($availableFields, 'label'));
-        $fieldLabels = array_replace($availableFieldLabels, array_filter($formFieldLabels));
-
-        // @see \AdvancedSearch\FormAdapter\AbstractFormAdapter::toQuery()
-        // This function manages only one level, so check value when needed.
-        $flatArray = function ($value): array {
-            if (!is_array($value)) {
-                return [$value];
-            }
-            $firstKey = key($value);
-            if (is_numeric($firstKey)) {
-                return $value;
-            }
-            return is_array(reset($value)) ? $value[$firstKey] : [$value[$firstKey]];
-        };
-
-        foreach ($this->query as $key => $value) {
-            if ($value === null || $value === '' || $value === []) {
-                continue;
-            }
-
-            switch ($key) {
-                case 'q':
-                    $filterLabel = $translate('Query'); // @translate
-                    $filters[$filterLabel][$this->urlQuery($key)] = $query['q'];
-                    break;
-
-                // Resource type is "items", "item_sets", etc.
-                case 'resource_type':
-                    $resourceTypes = [
-                        'items' => $transalte('Items'),
-                        'item_sets' => $transalte('Item sets'),
-                    ];
-                    $filterLabel = $translate('Resource type'); // @translate
-                    foreach ($flatArray($value) as $subKey => $subValue) {
-                        $filters[$filterLabel][$this->urlQuery($key, $subKey)] = $resourceTypes[$subValue] ?? $subValue;
-                    }
-                    break;
-
-                // Resource id.
-                case 'id':
-                    $filterLabel = $translate('Resource id'); // @translate
-                    foreach (array_filter(array_map('intval', $flatArray($value))) as $subKey => $subValue) {
-                        $filters[$filterLabel][$this->urlQuery($key, $subKey)] = $subValue;
-                    }
-                    break;
-
-                case 'site':
-                    $filterLabel = $translate('Site');
-                    $isId = is_array($value) && key($value) === 'id';
-                    foreach (array_filter($flatArray($value), 'is_numeric') as $subKey => $subValue) {
-                        try {
-                            $filterValue = $api->read('sites', $subValue)->getContent()->title();
-                        } catch (NotFoundException $e) {
-                            $filterValue = $translate('Unknown site');
-                        }
-                        $urlQuery = $isId ? $this->urlQueryId($key, $subKey) : $this->urlQuery($key, $subKey);
-                        $filters[$filterLabel][$urlQuery] = $filterValue;
-                    }
-                    break;
-
-                case 'owner':
-                    $filterLabel = $translate('User');
-                    $isId = is_array($value) && key($value) === 'id';
-                    foreach (array_filter($flatArray($value), 'is_numeric') as $subKey => $subValue) {
-                        try {
-                            $filterValue = $api->read('users', $subValue)->getContent()->name();
-                        } catch (NotFoundException $e) {
-                            $filterValue = $translate('Unknown user');
-                        }
-                        $urlQuery = $isId ? $this->urlQueryId($key, $subKey) : $this->urlQuery($key, $subKey);
-                        $filters[$filterLabel][$urlQuery] = $filterValue;
-                    }
-                    break;
-
-                case 'class':
-                    $filterLabel = $translate('Class'); // @translate
-                    $isId = is_array($value) && key($value) === 'id';
-                    foreach ($flatArray($value) as $subKey => $subValue) {
-                        if (is_numeric($subValue)) {
-                            try {
-                                $filterValue = $translate($api->read('resource_classes', $subValue)->getContent()->label());
-                            } catch (NotFoundException $e) {
-                                $filterValue = $translate('Unknown class'); // @translate
-                            }
-                        } else {
-                            $filterValue = $translate($api->searchOne('resource_classes', ['term' => $subValue])->getContent());
-                            $filterValue = $filterValue ? $filterValue->label() : $translate('Unknown class');
-                        }
-                        $urlQuery = $isId ? $this->urlQueryId($key, $subKey) : $this->urlQuery($key, $subKey);
-                        $filters[$filterLabel][$urlQuery] = $filterValue;
-                    }
-                    break;
-
-                case 'template':
-                    $filterLabel = $translate('Template'); // @translate
-                    $isId = is_array($value) && key($value) === 'id';
-                    foreach ($flatArray($value) as $subKey => $subValue) {
-                        if (is_numeric($subValue)) {
-                            try {
-                                $filterValue = $translate($api->read('resource_templates', $subValue)->getContent()->label());
-                            } catch (NotFoundException $e) {
-                                $filterValue = $translate('Unknown template'); // @translate
-                            }
-                        } else {
-                            $filterValue = $translate($api->searchOne('resource_templates', ['label' => $subValue])->getContent());
-                            $filterValue = $filterValue ? $filterValue->label() : $translate('Unknown template');
-                        }
-                        $urlQuery = $isId ? $this->urlQueryId($key, $subKey) : $this->urlQuery($key, $subKey);
-                        $filters[$filterLabel][$urlQuery] = $filterValue;
-                    }
-                    break;
-
-                case 'item_set':
-                    $filterLabel = $translate('Item set');
-                    $isId = is_array($value) && key($value) === 'id';
-                    foreach (array_filter($flatArray($value), 'is_numeric') as $subKey => $subValue) {
-                        try {
-                            $filterValue = $api->read('item_sets', $subValue)->getContent()->displayTitle();
-                        } catch (NotFoundException $e) {
-                            $filterValue = $translate('Unknown item set');
-                        }
-                        $urlQuery = $isId ? $this->urlQueryId($key, $subKey) : $this->urlQuery($key, $subKey);
-                        $filters[$filterLabel][$urlQuery] = $filterValue;
-                    }
-                    break;
-
-                case 'filter':
-                    $queryTypes = [
-                        'eq' => $translate('is exactly'), // @translate
-                        'neq' => $translate('is not exactly'), // @translate
-                        'in' => $translate('contains'), // @translate
-                        'nin' => $translate('does not contain'), // @translate
-                        'ex' => $translate('has any value'), // @translate
-                        'nex' => $translate('has no values'), // @translate
-                        'list' => $translate('is in list'), // @translate
-                        'nlist' => $translate('is not in list'), // @translate
-                        'sw' => $translate('starts with'), // @translate
-                        'nsw' => $translate('does not start with'), // @translate
-                        'ew' => $translate('ends with'), // @translate
-                        'new' => $translate('does not end with'), // @translate
-                        'res' => $translate('is resource with ID'), // @translate
-                        'nres' => $translate('is not resource with ID'), // @translate
-                        'lex' => $translate('is a linked resource'), // @translate
-                        'nlex' => $translate('is not a linked resource'), // @translate
-                        'lres' => $translate('is linked with resource with ID'), // @translate
-                        'nlres' => $translate('is not linked with resource with ID'), // @translate
-                        'gt' => $translate('greater than'), // @translate
-                        'gte' => $translate('greater than or equal'), // @translate
-                        'lte' => $translate('lower than or equal'), // @translate
-                        'lt' => $translate('lower than'), // @translate
-                    ];
-
-                    $reciprocalQueryTypes = [
-                        'eq' => 'neq',
-                        'neq' => 'eq',
-                        'in' => 'nin',
-                        'nin' => 'in',
-                        'ex' => 'nex',
-                        'nex' => 'ex',
-                        'list' => 'nlist',
-                        'nlist' => 'list',
-                        'sw' => 'nsw',
-                        'nsw' => 'sw',
-                        'ew' => 'new',
-                        'new' => 'ew',
-                        'res' => 'nres',
-                        'nres' => 'res',
-                        'lex' => 'nlex',
-                        'nlex' => 'lex',
-                        'lres' => 'nlres',
-                        'nlres' => 'lres',
-                        'gt' => 'lte',
-                        'gte' => 'lt',
-                        'lte' => 'gt',
-                        'lt' => 'gte',
-                    ];
-
-                    // $subjectQueryTypes = [
-                    //     'lex',
-                    //     'nlex',
-                    //     'lres',
-                    //     'nlres',
-                    // ];
-
-                    $withoutValue = [
-                        'ex',
-                        'nex',
-                        'lex',
-                        'nlex',
-                    ];
-
-                    // To get the name of the advanced fields, a loop should be done for now.
-                    $searchFormAdvancedLabels = [];
-                    foreach ($searchFormSettings['filters'] as $searchFormFilter) {
-                        if ($searchFormFilter['type'] === 'Advanced') {
-                            $searchFormAdvancedLabels = array_column($searchFormFilter['fields'], 'label', 'value');
-                            break;
-                        }
-                    }
-                    $fieldFiltersLabels = array_replace($fieldLabels, array_filter($searchFormAdvancedLabels));
-
-                    $index = 0;
-                    foreach (array_filter($value, 'is_array') as $subKey => $queryRow) {
-                        $queryType = $queryRow['type'] ?? 'eq';
-                        if (!isset($reciprocalQueryTypes[$queryType])) {
-                            continue;
-                        }
-
-                        $joiner = $queryRow['join'] ?? 'and';
-                        $value = $queryRow['value'] ?? '';
-
-                        $isWithoutValue = in_array($queryType, $withoutValue, true);
-
-                        // A value can be an array with types "list" and "nlist".
-                        if (!is_array($value)
-                            && !strlen((string) $value)
-                            && !$isWithoutValue
-                        ) {
-                            continue;
-                        }
-
-                        if ($isWithoutValue) {
-                            $value = '';
-                        }
-
-                        // The field is currently always single: use multi-fields else.
-                        // TODO Support multi-fields.
-                        $queryField = $queryRow['field'] ?? '';
-                        $fieldLabel = $queryField
-                            ? $fieldFiltersLabels[$queryField] ?? $translate('Unknown field') // @translate
-                            : $translate('[Any field]'); // @translate
-                        $filterLabel = $fieldLabel . ' ' . $queryTypes[$queryType];
-                        if ($index > 0) {
-                            if ($joiner === 'or') {
-                                $filterLabel = $translate('OR') . ' ' . $filterLabel;
-                            } elseif ($joiner === 'not') {
-                                $filterLabel = $translate('EXCEPT') . ' ' . $filterLabel; // @translate
-                            } else {
-                                $filterLabel = $translate('AND') . ' ' . $filterLabel;
-                            }
-                        }
-
-                        $filters[$filterLabel][$this->urlQuery($key, $subKey)] = implode(', ', $flatArray($value));
-
-                        ++$index;
-                    }
-                    break;
-
-                default:
-                    // Append only fields that are not yet processed somewhere
-                    // else, included searchFilters helper.
-                    if (isset($fieldLabels[$key]) && !isset($filters[$fieldLabels[$key]])) {
-                        $filterLabel = $fieldLabels[$key];
-                        foreach (array_filter(array_map('trim', array_map('strval', $flatArray($value))), 'strlen') as $subKey => $subValue) {
-                            $filters[$filterLabel][$this->urlQuery($key, $subKey)] = $subValue;
-                        }
-                    }
-                    break;
-            }
-        }
-
-        return $filters;
-    }
-
-    /**
-     * Get the url of the query without the specified key and subkey.
-     *
-     * @param string|int $key
-     * @param string|int|null $subKey
-     * @return string
-     */
-    protected function urlQuery($key, $subKey = null): string
-    {
-        $newQuery = $this->query;
-        if (is_null($subKey) || !is_array($newQuery[$key]) || count($newQuery[$key]) <= 1) {
-            unset($newQuery[$key]);
-        } else {
-            unset($newQuery[$key][$subKey]);
-        }
-        return $newQuery
-            ? $this->baseUrl . '?' . http_build_query($newQuery, '', '&', PHP_QUERY_RFC3986)
-            : $this->baseUrl;
-    }
-
-    /**
-     * Get url of the query without specified key and subkey for special fields.
-     *
-     * @todo Remove this special case.
-     *
-     * @param string|int $key
-     * @param string|int|null $subKey
-     * @return string
-     */
-    protected function urlQueryId($key, $subKey): string
-    {
-        $newQuery = $this->query;
-        if (!is_array($newQuery[$key]) || !is_array($newQuery[$key]['id']) || count($newQuery[$key]['id']) <= 1) {
-            unset($newQuery[$key]);
-        } else {
-            unset($newQuery[$key]['id'][$subKey]);
-        }
-        return $newQuery
-            ? $this->baseUrl . '?' . http_build_query($newQuery, '', '&', PHP_QUERY_RFC3986)
-            : $this->baseUrl;
     }
 
     /**
@@ -1406,7 +914,7 @@ class Module extends AbstractModule
     }
 
     /**
-     * Delete the index for the resource in search engine.
+     * Delete the search engine for a resource.
      *
      * @param IndexerInterface $indexer
      * @param string $resourceName
@@ -1420,19 +928,19 @@ class Module extends AbstractModule
             $services = $this->getServiceLocator();
             $logger = $services->get('Omeka\Logger');
             $logger->err(new Message(
-                'Unable to delete the search index for resource #%d: %s', // @translate
+                'Unable to delete the search engine for resource #%d: %s', // @translate
                 $id, $e->getMessage()
             ));
             $messenger = $services->get('ControllerPluginManager')->get('messenger');
             $messenger->addWarning(new Message(
-                'Unable to delete the search index for the deleted resource #%d: see log.', // @translate
+                'Unable to delete the search engine for the deleted resource #%d: see log.', // @translate
                 $id
             ));
         }
     }
 
     /**
-     * Update the index in search engine for a resource.
+     * Update the search engine for a resource.
      *
      * @param IndexerInterface $indexer
      * @param Resource $resource
@@ -1450,7 +958,7 @@ class Module extends AbstractModule
             ));
             $messenger = $services->get('ControllerPluginManager')->get('messenger');
             $messenger->addWarning(new Message(
-                'Unable to update the search index for resource #%d: see log.', // @translate
+                'Unable to update the search engine for resource #%d: see log.', // @translate
                 $resource->getId()
             ));
         }
@@ -1488,13 +996,8 @@ class Module extends AbstractModule
             return;
         }
 
-        // A try/catch is required to bypass issues during upgrade.
-        try {
-            /** @var \AdvancedSearch\Api\Representation\SearchConfigRepresentation $searchConfig */
-            $searchConfig = $plugins->get('api')->read('search_configs', ['id' => $searchConfig])->getContent();
-        } catch (\Exception $e) {
-            return;
-        }
+        /** @var \AdvancedSearch\Api\Representation\SearchConfigRepresentation $searchConfig */
+        $searchConfig = $plugins->get('api')->searchOne('search_configs', ['id' => $searchConfig])->getContent();
         if (!$searchConfig) {
             return;
         }
@@ -1506,8 +1009,8 @@ class Module extends AbstractModule
             $basePath = $plugins->get('basePath');
             $assetUrl = $plugins->get('assetUrl');
             $searchUrl = $basePath('admin/' . $searchConfig->path());
-            $autoSuggestUrl = $searchConfig->subSetting('autosuggest', 'url');
-            if (!$autoSuggestUrl) {
+            $autosuggestUrl = $searchConfig->subSetting('autosuggest', 'url');
+            if (!$autosuggestUrl) {
                 $suggester = $searchConfig->subSetting('autosuggest', 'suggester');
                 if ($suggester) {
                     $autoSuggestUrl = $searchUrl . '/suggest';
@@ -1586,9 +1089,6 @@ class Module extends AbstractModule
         $this->createDefaultSearchConfig();
     }
 
-    /**
-     * @todo Replace this method by the standard InstallResources() when the upgrade from Search will be removed.
-     */
     protected function createDefaultSearchConfig(): int
     {
         // Note: during installation or upgrade, the api may not be available
@@ -1617,13 +1117,13 @@ SQL;
 INSERT INTO `search_engine`
 (`name`, `adapter`, `settings`, `created`)
 VALUES
-(?, ?, ?, NOW());
+('Internal (sql)', 'internal', ?, NOW());
 SQL;
-            $searchEngineConfig = require __DIR__ . '/data/search_engines/internal.php';
-            $connection->executeStatement($sql, [
-                $searchEngineConfig['o:name'],
-                $searchEngineConfig['o:adapter'],
-                json_encode($searchEngineConfig['o:settings'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            $searchEngineSettings = [
+                'resources' => ['items', 'item_sets'],
+            ];
+            $connection->executeQuery($sql, [
+                json_encode($searchEngineSettings, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
             ]);
             $searchEngineId = $connection->fetchColumn($sqlSearchEngineId);
             $message = new Message(
@@ -1655,7 +1155,7 @@ VALUES
 ($searchEngineId, 'Internal suggester (sql)', ?, NOW());
 SQL;
             $suggesterSettings = [
-                'direct' => false,
+                'direct' => true,
                 'mode_index' => 'start',
                 'mode_search' => 'start',
                 'limit' => 25,
@@ -1663,12 +1163,12 @@ SQL;
                 'fields' => [],
                 'excluded_fields' => [],
             ];
-            $connection->executeStatement($sql, [
+            $connection->executeQuery($sql, [
                 json_encode($suggesterSettings, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
             ]);
             // $suggesterId = $connection->fetchColumn($sqlSuggesterId);
             $message = new Message(
-                'The internal suggester (sql) will be available after indexation. Configure it in the %ssearch manager%s.', // @translate
+                'The internal suggester (sql) is available. Configure it in the %ssearch manager%s.', // @translate
                 // Don't use the url helper, the route is not available during install.
                 sprintf('<a href="%s">', $urlHelper('admin') . '/search-manager'),
                 '</a>'
@@ -1691,20 +1191,17 @@ SQL;
 INSERT INTO `search_config`
 (`engine_id`, `name`, `path`, `form_adapter`, `settings`, `created`)
 VALUES
-($searchEngineId, ?, ?, ?, ?, NOW());
+($searchEngineId, 'Default', 'find', 'main', ?, NOW());
 SQL;
-            $searchConfigConfig = require __DIR__ . '/data/search_configs/default.php';
-            $connection->executeStatement($sql, [
-                $searchConfigConfig['o:name'],
-                $searchConfigConfig['o:path'],
-                $searchConfigConfig['o:form'],
-                json_encode($searchConfigConfig['o:settings'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            $searchConfigSettings = require __DIR__ . '/data/search_configs/default.php';
+            $connection->executeQuery($sql, [
+                json_encode($searchConfigSettings, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
             ]);
 
             $message = new Message(
                 'The default search page is available. Configure it in the %ssearch manager%s, in the main settings (for admin) and in site settings (for public).', // @translate
                 // Don't use the url helper, the route is not available during install.
-                sprintf('<a href="%s">', $urlHelper('admin') . '/search-manager/suggester/1/edit'),
+                sprintf('<a href="%s">', $urlHelper('admin') . '/search-manager'),
                 '</a>'
             );
             $message->setEscapeHtml(false);

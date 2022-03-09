@@ -81,7 +81,7 @@ SQL;
 $sqls = array_filter(array_map('trim', explode(";\n", $sql)));
 foreach ($sqls as $sql) {
     try {
-        $connection->executeStatement($sql);
+        $connection->executeUpdate($sql);
     } catch (\Exception $e) {
         $messenger->addError($e->getMessage());
     }
@@ -103,7 +103,7 @@ WHERE
         "search_batch_size"
     );
 SQL;
-$connection->executeStatement($sql);
+$connection->executeUpdate($sql);
 
 // Convert the site settings.
 
@@ -121,7 +121,7 @@ WHERE
         "search_api_page"
     );
 SQL;
-$connection->executeStatement($sql);
+$connection->executeUpdate($sql);
 
 // Do some renaming for settings.
 
@@ -149,7 +149,7 @@ WHERE
         "advancedsearch_api_page"
     );
 SQL;
-$connection->executeStatement($sql);
+$connection->executeUpdate($sql);
 
 // Do some renaming for site settings.
 
@@ -178,18 +178,7 @@ WHERE
         "advancedsearch_api_page"
     );
 SQL;
-$connection->executeStatement($sql);
-
-$sql = <<<'SQL'
-REPLACE INTO `site` (`navigation`)
-SELECT
-    REPLACE(`site`.`navigation`,
-        "search_page_id",
-        "advancedsearch_config_id"
-    )
-FROM `site`
-SQL;
-$connection->executeStatement($sql);
+$connection->executeUpdate($sql);
 
 // Remove original data and module.
 
@@ -228,7 +217,7 @@ SQL;
 $sqls = array_filter(array_map('trim', explode(";\n", $sql)));
 foreach ($sqls as $sql) {
     try {
-        $connection->executeStatement($sql);
+        $connection->executeUpdate($sql);
     } catch (\Exception $e) {
         $messenger->addError($e->getMessage());
     }
@@ -251,7 +240,8 @@ $inputs = [
 $sql = <<<'SQL'
 SELECT `id`, `settings` FROM `search_config`;
 SQL;
-$result = $connection->executeQuery($sql)->fetchAllKeyValue() ?: [];
+$stmt = $connection->executeQuery($sql);
+$result = $stmt->fetchAll(\PDO::FETCH_KEY_PAIR) ?: [];
 foreach ($result as $id => $searchConfigSettings) {
     $searchConfigSettings = json_decode($searchConfigSettings, true) ?: [];
     $searchConfigSettings['resource_fields'] = [
@@ -275,7 +265,7 @@ foreach ($result as $id => $searchConfigSettings) {
         case 'itemSet':
             if (!empty($inputs[strtolower($form['item_set_filter_type'] ?? '')])) {
                 $searchConfigSettings['form']['filters'][] = [
-                    'field' => $form['item_set_id_field'] ?? 'item_set_id_field',
+                    'field' => $form['items_set_id_field'] ?? 'items_set_id_field',
                     'label' => 'Collection',
                     'type' => $inputs[strtolower($form['item_set_filter_type'])] ?? 'Select',
                 ];
@@ -339,7 +329,7 @@ UPDATE `search_config`
 SET `settings` = $searchConfigSettings
 WHERE `id` = $id;
 SQL;
-    $connection->executeStatement($sql);
+    $connection->executeUpdate($sql);
 
     // All old adapters are now managed by the main one, unless the api.
     // They should be updated manually.
@@ -348,7 +338,7 @@ UPDATE `search_config`
 SET `form_adapter` = "main"
 WHERE `form_adapter` NOT IN ("api");
 SQL;
-    $connection->executeStatement($sql);
+    $connection->executeUpdate($sql);
 }
 
 $message = new Message(

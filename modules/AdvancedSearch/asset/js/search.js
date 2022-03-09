@@ -30,34 +30,13 @@ var Search = (function() {
     var self = {};
 
     self.setViewType = function(viewType) {
-        var resourceLists = document.querySelectorAll('.search-results .resource-list');
+        var resourceLists = document.querySelectorAll('div.resource-list');
         for (var i = 0; i < resourceLists.length; i++) {
             var resourceItem = resourceLists[i];
-            resourceItem.className = resourceItem.className.replace(' grid', '').replace(' list', '')
-                + ' ' + viewType;
+            resourceItem.className = 'resource-list ' + viewType;
         }
         localStorage.setItem('search_view_type', viewType);
     };
-
-    /**
-     * Check if the current query is an advanced search one.
-     */
-    self.isAdvancedSearchQuery = function () {
-        let searchParams = new URLSearchParams(document.location.search);
-        let  params = Array.from(searchParams.entries());
-        for (let i in params) {
-            let k = params[i][0];
-            let v = params[i][1];
-            if (v !== ''
-                && !['q', 'search', 'fulltext_search', 'sort', 'sort_by', 'sort_order', 'page', 'per_page', 'limit', 'offset', 'csrf'].includes(k)
-                && !k.startsWith('facet[')
-                && !k.startsWith('facet%5B')
-            ) {
-                return true;
-            }
-        }
-        return false;
-    }
 
     /**
      * Chosen default options.
@@ -117,39 +96,7 @@ var Search = (function() {
 
 $(document).ready(function() {
 
-    /**
-     * When the simple and the advanced form are the same form.
-     */
-    $('.advanced-search-form-toggle a').on('click', function(e) {
-        e.preventDefault();
-        $('.advanced-search-form, .advanced-search-form-toggle').toggleClass('open');
-        if ($('.advanced-search-form').hasClass('open')) {
-            $('.advanced-search-form-toggle a').text($('.advanced-search-form-toggle').data('msgOpen'));
-        } else {
-            $('.advanced-search-form-toggle a').text($('.advanced-search-form-toggle').data('msgClosed'));
-        }
-        // TODO Don't open autosuggestion when toggle.
-        // $('#search-form [name=q]').focus();
-    });
-
-    /* Per-page selector links (depending if server or client build) */
-    $('.search-results-per-page select').on('change', function(e) {
-        // Per-page fields don't look like a url.
-        e.preventDefault();
-        var perPage = $(this).val();
-        if (perPage.substring(0, 6) === 'https:' || perPage.substring(0, 5) === 'http:') {
-            window.location = perPage;
-        } else if (perPage.substring(0, 1) === '/') {
-            window.location = window.location.origin + perPage;
-        } else {
-            var searchParams = new URLSearchParams(window.location.search);
-            searchParams.set('page', 1);
-            searchParams.set('per_page', $(this).val());
-            window.location.search = searchParams.toString();
-        }
-    });
-
-    /* Sort selector links (depending if server or client build) */
+    /* Sort selector links (depending if server of client build) */
     $('.search-sort select').on('change', function(e) {
         // Sort fields don't look like a url.
         e.preventDefault();
@@ -174,21 +121,11 @@ $(document).ready(function() {
         $(this).closest('li').hide();
         var facetName = $(this).data('facetName');
         var facetValue = $(this).data('facetValue');
-        $('.search-facet-item input:checked').each(function() {
+        $('.search-facet-item input').each(function() {
             if ($(this).prop('name') === facetName
                 && $(this).prop('value') === String(facetValue)
             ) {
                 $(this).prop('checked', false);
-            }
-        });
-        $('select.search-facet-items option:selected').each(function() {
-            if ($(this).closest('select').prop('name') === facetName
-                && $(this).prop('value') === String(facetValue)
-            ) {
-                $(this).prop('selected', false);
-                if ($.isFunction($.fn.chosen)) {
-                    $(this).closest('select').trigger('chosen:updated');
-                }
             }
         });
     });
@@ -199,46 +136,18 @@ $(document).ready(function() {
         }
     });
 
-    $('.search-facets').on('change', 'select', function() {
-        if (!$('.apply-facets').length) {
-            // Replace the current select args by new ones.
-            // Names in facets have no index in array ("[]").
-            let url = new URL(window.location.href);
-            let selectName = $(this).prop('name');
-            url.searchParams.delete(selectName);
-            $(this).val().forEach((element, index) => {
-                url.searchParams.set(selectName.substring(0, selectName.length - 2) + '[' + index + ']', element);
-            });
-            window.location = url.toString();
-        }
-    });
-
     $('.search-view-type-list').on('click', function(e) {
         e.preventDefault();
         Search.setViewType('list');
         $('.search-view-type').removeClass('active');
-        $('.search-view-type-list').addClass('active');
+        $(this).addClass('active');
     });
-
     $('.search-view-type-grid').on('click', function(e) {
         e.preventDefault();
         Search.setViewType('grid');
         $('.search-view-type').removeClass('active');
-        $('.search-view-type-grid').addClass('active');
+        $(this).addClass('active');
     });
-
-    /**********
-     * Initialisation.
-     */
-
-    /**
-     * Open advanced search when it is used according to the query.
-     * @todo Check if we are on the advanced search page first.
-     * @todo Use focus on load, but don't open autosuggestion on focus.
-     */
-    if (Search.isAdvancedSearchQuery()) {
-        $('.advanced-search-form-toggle a').click();
-    }
 
     var view_type = localStorage.getItem('search_view_type');
     if (!view_type) {
@@ -255,24 +164,5 @@ $(document).ready(function() {
     if ($.isFunction($.fn.chosen)) {
         $('.chosen-select').chosen(Search.chosenOptions);
     }
-
-    /********
-     * Standard advanced search form.
-     */
-
-    // Disable query text according to some query types without values.
-    // See global.js.
-    function disableQueryTextInput(queryType) {
-        var queryText = queryType.siblings('.query-text');
-        queryText.prop('disabled',
-            ['ex', 'nex', 'lex', 'nlex'].indexOf(queryType.val()) !== -1);
-    };
-    $(document).on('change', '.query-type', function () {
-         disableQueryTextInput($(this));
-    });
-    // Updating querying should be done on load too.
-    $('#property-queries .query-type').each(function() {
-         disableQueryTextInput($(this));
-    });
 
 });

@@ -34,7 +34,7 @@ FROM `setting`
 WHERE
     `setting`.`id` LIKE "advancedsearchplus#_%" ESCAPE "#";
 SQL;
-$connection->executeStatement($sql);
+$connection->executeUpdate($sql);
 
 // Convert the site settings.
 
@@ -48,7 +48,7 @@ FROM `site_setting`
 WHERE
     `site_setting`.`id` LIKE "advancedsearchplus#_%" ESCAPE "#";
 SQL;
-$connection->executeStatement($sql);
+$connection->executeUpdate($sql);
 
 // Remove original data and module.
 
@@ -69,7 +69,7 @@ SQL;
 $sqls = array_filter(array_map('trim', explode(";\n", $sql)));
 foreach ($sqls as $sql) {
     try {
-        $connection->executeStatement($sql);
+        $connection->executeUpdate($sql);
     } catch (\Exception $e) {
         $messenger->addError($e->getMessage());
     }

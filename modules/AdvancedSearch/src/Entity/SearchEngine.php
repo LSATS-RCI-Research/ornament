@@ -158,8 +158,7 @@ class SearchEngine extends AbstractEntity
 
     public function getAdapter(): string
     {
-        // TODO Normally, the cast is useless, because null is not used.
-        return (string) $this->adapter;
+        return $this->adapter;
     }
 
     public function setSettings(?array $settings): self

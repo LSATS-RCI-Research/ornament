@@ -1,8 +1,7 @@
-<?php
+<?php declare(strict_types=1);
 
 /*
- * Copyright BibLibre, 2016
- * Copyright Daniel Berthereau, 2018-2021
+ * Copyright Daniel Berthereau, 2021
  *
  * This software is governed by the CeCILL license under French law and abiding
  * by the rules of distribution of free software.  You can use, modify and/ or
@@ -28,38 +27,18 @@
  * knowledge of the CeCILL license and that you accept its terms.
  */
 
-/**
- * @var \Laminas\View\Renderer\PhpRenderer $this
- * @var \Omeka\Api\Representation\SiteRepresentation $site
- * @var \Omeka\Site\Navigation\Link\LinkInterface $link
- * @var ?array $data
- */
+namespace AdvancedSearch\Service\ViewHelper;
 
-$plugins = $this->getHelperPluginManager();
-$translate = $plugins->get('translate');
-$escape = $plugins->get('escapeHtml');
+use AdvancedSearch\View\Helper\FacetActive;
+use Interop\Container\ContainerInterface;
+use Laminas\ServiceManager\Factory\FactoryInterface;
 
-$data = empty($data) ? [] : $data;
-$label = $data['label'] ?? null;
-$searchConfigId = $data['advancedsearch_config_id'] ?? null;
-
-$searchConfigs = $this->api()->search('search_configs')->getContent();
-?>
-
-<label><?= $translate('Type') ?>
-    <input type="text" value="<?= $escape($translate($link->getName())) ?>" disabled="disabled"/>
-</label>
-<label><?= $translate('Label') ?>
-    <input type="text" data-name="label" value="<?= $escape($label) ?>"/>
-</label>
-<label>
-    <?= $translate('Page') ?>
-    <select data-name="advancedsearch_config_id">
-        <?php foreach ($searchConfigs as $searchConfig): ?>
-            <?php $selected = $searchConfigId && $searchConfigId == $searchConfig->id(); ?>
-            <option value="<?= $searchConfig->id() ?>"<?= $selected ? ' selected="selected"' : '' ?>>
-                <?= $searchConfig->name() ?>
-            </option>
-        <?php endforeach; ?>
-    </select>
-</label>
+class FacetActiveFactory implements FactoryInterface
+{
+    public function __invoke(ContainerInterface $container, $requestedName, array $options = null)
+    {
+        return new FacetActive(
+            $container->get('Application')
+        );
+    }
+}
