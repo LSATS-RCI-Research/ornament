@@ -22,7 +22,6 @@ $addPartial = function($partial) use (&$partials, $partialExcludelist) {
 
 $addPartial('common/advanced-search/fulltext');
 $addPartial('common/advanced-search/properties');
-$addPartial('common/advanced-search/resource-class');
 if ($this->status()->isAdminRequest()) {
     $addPartial('common/advanced-search/resource-template');
 }
