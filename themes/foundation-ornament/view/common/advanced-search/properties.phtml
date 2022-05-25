@@ -48,7 +48,9 @@ $queryText = function(array $search, $index) {
                     <?php echo $queryOption('and', $property, 'joiner', $translate('AND')); ?>
                     <?php echo $queryOption('or', $property, 'joiner', $translate('OR')); ?>
                 </select>
-                <?php echo $this->propertySelect([
+                <?php
+                    // create variable of html data to remove unwanted chars
+                    $dropDownBoxHTML = $this->propertySelect([
                     'name' => $stem . '[property]',
                     'attributes' => [
                         'class' => 'query-property',
@@ -59,7 +61,14 @@ $queryText = function(array $search, $index) {
                         'empty_option' => '[Any Property]', // @translate
                         'apply_templates' => $this->status()->isSiteRequest() ? $this->siteSetting('search_apply_templates') : false,
                     ]
-                ]); ?>
+                ]); 
+                    // Find and replace the characters starting from '"<' 
+                    // leading up to the '(' in front of the alternate label
+                    $partial_replace = preg_replace('/(?<=">)(.*\s\()/', '', $dropDownBoxHTML);
+                    // Remove the enclosing ')' before the '<'character
+                    // to get the alt labels alone. Then display the drop down
+                    echo preg_replace('/(\))(?=<)/', '', $partial_replace);
+                ?>
                 <select class="query-type" name="<?php echo $this->escapeHtml($stem . '[type]'); ?>" aria-label="<?php echo $translate('Query type'); ?>">
                     <?php echo $queryOption('eq', $property, 'type', $translate('is exactly')); ?>
                     <?php echo $queryOption('neq', $property, 'type', $translate('is not exactly')); ?>
