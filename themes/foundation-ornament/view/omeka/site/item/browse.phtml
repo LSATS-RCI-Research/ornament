@@ -98,6 +98,11 @@ foreach ($items as $item):
             <div class="description <?php echo ($bodyTruncate) ? $bodyTruncate : ''; ?>"><?php echo $body; ?></div>
             <?php endif; ?>
         </div>
+        <!-- Add new information to list view if it exists -->
+        <div><?php if($item->value('dcterms:subject')) echo "Text Category: " . $item->value('dcterms:subject'); ?></div>
+        <div><?php if($item->value('dcterms:creator')) echo "Author: " . $item->value('dcterms:creator'); ?></div>
+        <div><?php if($item->value('dcterms:date')) echo "Date: " . $item->value('dcterms:date'); ?></div>
+        <div><?php if($item->value('dcterms:spatial')) echo "Location: " . $item->value('dcterms:spatial'); ?></div>
     </li>
 <?php endforeach; ?>
 </ul>
