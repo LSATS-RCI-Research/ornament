@@ -95,14 +95,19 @@ foreach ($items as $item):
         <div class="resource-meta <?php echo ($isGrid) ? '' : 'media-object-section'; ?>">
             <h4><?php echo $item->link($heading); ?></h4>
             <?php if ($body): ?>
+            <!-- Add and style the author -->
+            <div id='creator-column'>
+                <h5 style="color: #1468a0"><?php if($item->value('dcterms:creator')) echo $item->value('dcterms:creator'); ?></h5>
+            </div>
+            
             <div class="description <?php echo ($bodyTruncate) ? $bodyTruncate : ''; ?>"><?php echo $body; ?></div>
             <?php endif; ?>
-                    <p>
-        <!-- Add new information to list view if it exists -->
-        <div id='creator-column'><?php if($item->value('dcterms:creator')) echo "Author: " . $item->value('dcterms:creator'); ?></div>
-        <div id='category-column'><?php if($item->value('dcterms:subject')) echo "Text Category: " . $item->value('dcterms:subject'); ?></div>
-        <div id='date-column'><?php if($item->value('dcterms:date')) echo "Date: " . $item->value('dcterms:date'); ?></div>
-        <div id='location-column'><?php if($item->value('dcterms:spatial')) echo "Location: " . $item->value('dcterms:spatial'); ?></div>
+        <p>
+            <!-- Add new information to list view if it exists -->
+            <div id='category-column'><?php if($item->value('dcterms:subject')) echo "Text Category: " . $item->value('dcterms:subject'); ?></div>
+            <div id='temporal-column'><?php if($item->value('dcterms:temporal')) echo "Century Range: " . $item->value('dcterms:temporal'); ?></div>
+            <div id='date-column'><?php if($item->value('dcterms:date')) echo "Date: " . $item->value('dcterms:date'); ?></div>
+            <div id='location-column'><?php if($item->value('dcterms:spatial')) echo "Location: " . $item->value('dcterms:spatial'); ?></div>
         </p>
         </div>
     </li>
