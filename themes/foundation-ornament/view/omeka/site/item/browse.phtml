@@ -100,7 +100,7 @@ foreach ($items as $item):
                 <h5 style="color: #1468a0"><?php if($item->value('dcterms:creator')) echo $item->value('dcterms:creator'); ?></h5>
             </div>
             
-            <div class="description <?php echo ($bodyTruncate) ? $bodyTruncate : ''; ?>"><?php echo $body; ?></div>
+            <div class="description <?php echo ($bodyTruncate) ? $bodyTruncate : ''; ?>"><?php echo $escape($body); ?></div>
             <?php endif; ?>
         <p>
             <!-- Add new information to list view if it exists -->
